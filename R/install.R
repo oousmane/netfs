@@ -43,25 +43,70 @@
 }
 
 .format_install_step <- function(step, elevated = FALSE) {
-  command <- if (elevated) paste("sudo", step$command) else step$command
+  command <- if (elevated) paste("sudo -n", step$command) else step$command
   paste(c(command, vapply(step$args, shQuote, character(1))), collapse = " ")
 }
 
-.run_install_step <- function(step, elevated = FALSE) {
+.processx_run <- function(...) processx::run(...)
+
+.run_install_step <- function(step, elevated = FALSE, timeout = 600) {
+  command <- step$command
+  args <- step$args
   if (elevated) {
-    return(.run_command(
-      "sudo",
-      args = c(step$command, step$args),
-      timeout = 600,
-      error_on_status = TRUE
-    ))
+    command <- "sudo"
+    args <- c("-n", step$command, step$args)
   }
-  .run_command(
-    step$command,
-    args = step$args,
-    timeout = 600,
-    error_on_status = TRUE
+
+  result <- tryCatch(
+    .processx_run(
+      command,
+      args = args,
+      error_on_status = FALSE,
+      timeout = timeout,
+      stdin = "",
+      cleanup_tree = TRUE,
+      windows_hide_window = TRUE
+    ),
+    error = function(e) {
+      if (grepl("timed out|timeout", conditionMessage(e), ignore.case = TRUE)) {
+        abort_netfs_timeout(
+          sprintf("Installation command timed out after %s seconds.", timeout),
+          command = command,
+          parent = e
+        )
+      }
+      abort_netfs_connection(
+        sprintf("Installation command '%s' could not be executed.", command),
+        command = command,
+        parent = e
+      )
+    }
   )
+
+  if (isTRUE(result$timeout)) {
+    abort_netfs_timeout(
+      sprintf("Installation command timed out after %s seconds.", timeout),
+      command = command
+    )
+  }
+
+  out <- list(
+    status = unname(result$status),
+    stdout = result$stdout %||% "",
+    stderr = result$stderr %||% ""
+  )
+  if (out$status != 0L) {
+    message <- if (elevated) {
+      paste0(
+        "The installer could not obtain non-interactive administrator access. ",
+        "Run 'sudo -v' in a terminal, then retry."
+      )
+    } else {
+      sprintf("Installation command '%s' failed with status %d.", command, out$status)
+    }
+    abort_netfs_connection(message, command = command, result = out)
+  }
+  out
 }
 
 #' Install the SMB command-line client
@@ -76,6 +121,8 @@
 #' @param ask Ask for confirmation before changing the system. In
 #'   non-interactive sessions, explicitly set `ask = FALSE` to authorize the
 #'   installation.
+#' @param timeout Maximum number of seconds allowed for each installation
+#'   command.
 #' @return `TRUE`, invisibly, when `smbclient` is available or Windows native
 #'   SMB support applies. A dry run returns the installation plan invisibly.
 #' @examples
@@ -84,9 +131,16 @@
 #' install_smbclient()
 #' }
 #' @export
-install_smbclient <- function(dry_run = FALSE, ask = TRUE) {
+install_smbclient <- function(dry_run = FALSE, ask = TRUE, timeout = 600) {
   .check_scalar_logical(dry_run, "dry_run")
   .check_scalar_logical(ask, "ask")
+  if (!is.numeric(timeout) || length(timeout) != 1L ||
+      is.na(timeout) || !is.finite(timeout) || timeout <= 0) {
+    rlang::abort(
+      "`timeout` must be a positive number of seconds.",
+      class = "netfs_validation_error"
+    )
+  }
   if (.Platform$OS.type == "windows") {
     message("Windows uses native UNC paths; `smbclient` is not required.")
     return(invisible(TRUE))
@@ -117,7 +171,9 @@ install_smbclient <- function(dry_run = FALSE, ask = TRUE) {
     }
   }
 
-  for (step in plan) .run_install_step(step, elevated = elevated)
+  for (step in plan) {
+    .run_install_step(step, elevated = elevated, timeout = timeout)
+  }
   if (!.has_smbclient()) {
     abort_netfs_backend_unavailable(
       "The installation command completed, but `smbclient` is still unavailable on PATH."

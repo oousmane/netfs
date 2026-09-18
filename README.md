@@ -130,6 +130,10 @@ install_smbclient(dry_run = TRUE)
 install_smbclient() # asks before changing the system
 ```
 
+Installation commands run through `processx` with a per-command timeout.
+On systems that require `sudo`, authenticate first with `sudo -v`; the
+installer never waits on a hidden password prompt.
+
 Inspect the current system and a connection without contacting a server:
 
 ```r

@@ -4,7 +4,7 @@
 \alias{install_smbclient}
 \title{Install the SMB command-line client}
 \usage{
-install_smbclient(dry_run = FALSE, ask = TRUE)
+install_smbclient(dry_run = FALSE, ask = TRUE, timeout = 600)
 }
 \arguments{
 \item{dry_run}{Display the selected installation commands without executing
@@ -13,6 +13,9 @@ them.}
 \item{ask}{Ask for confirmation before changing the system. In
 non-interactive sessions, explicitly set \code{ask = FALSE} to authorize the
 installation.}
+
+\item{timeout}{Maximum number of seconds allowed for each installation
+command.}
 }
 \value{
 \code{TRUE}, invisibly, when \code{smbclient} is available or Windows native
