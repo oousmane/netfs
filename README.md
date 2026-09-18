@@ -119,20 +119,21 @@ connection constructor for compatibility, netfs immediately stores it through
 | Local | `fs` | Always available when the package is installed |
 | FTP / FTPS | libcurl | Included through the `curl` package |
 | SSH / SFTP | OpenSSH | Requires `ssh` and `scp` executables |
-| SMB on Linux/macOS | `smbclient` | Must be installed separately |
+| SMB on Linux | Samba `smbclient` | Install the distribution's `smbclient` or `samba-client` package |
+| SMB on macOS | Native SMB mount | `smb()` mounts the share through macOS and operates on the mounted filesystem |
 | SMB on Windows | Windows UNC | Uses the current authenticated Windows session |
 
-On Linux or macOS, inspect the installation command before installing the SMB
-client:
+On Linux, install the Samba client utility using your distribution's package
+manager before using `smb()`. The full Samba server is needed only if the
+Linux machine will host SMB shares. See the
+[`smbclient` documentation](https://www.samba.org/samba/docs/current/man-html/smbclient.1.html).
 
-```r
-install_smbclient(dry_run = TRUE)
-install_smbclient() # asks before changing the system
-```
-
-Installation commands run through `processx` with a per-command timeout.
-On systems that require `sudo`, authenticate first with `sudo -v`; the
-installer never waits on a hidden password prompt.
+macOS already includes native SMB support. Calls through `smb()` mount the
+share from R with the native client, then use the mounted filesystem for file
+operations. Passwords are sent to AppleScript over standard input rather than
+placed in process arguments. macOS manages and may retain the mounted volume
+under `/Volumes`. See
+[Apple's SMB connection guide](https://support.apple.com/guide/mac-help/mchlp1140/mac).
 
 Inspect the current system and a connection without contacting a server:
 
@@ -144,7 +145,7 @@ netfs_capabilities(server)
 ## Current limitations
 
 - Remote operations depend on the capabilities of the selected backend.
-- Server-side `file_copy()` is unavailable for SSH, FTP, and Unix
+- Server-side `file_copy()` is unavailable for SSH, FTP, and the Linux
   `smbclient`; it fails with `netfs_unsupported` instead of downloading and
   re-uploading the file.
 - `file_transfer()` supports cross-connection transfers through temporary
@@ -152,14 +153,6 @@ netfs_capabilities(server)
 - Password authentication for command-line SSH is not injected into process
   arguments. Use an SSH agent, SSH configuration, or an identity file.
 - Normal unit tests use mocked transports and do not require live servers.
-
-## Integration testing
-
-The `Backend integration` GitHub Actions workflow provisions disposable
-OpenSSH, vsftpd, and Samba services on an Ubuntu runner. It exercises live SSH,
-FTP, and SMB operations plus an FTP-to-SMB `file_transfer()`. The integration
-tests remain skipped during ordinary local tests unless
-`NETFS_RUN_INTEGRATION=true` is set.
 
 Remote failures inherit from `netfs_error`, with subclasses for authentication,
 missing paths, permissions, timeouts, unavailable backends, and unsupported

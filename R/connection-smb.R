@@ -1,7 +1,9 @@
 #' Create an SMB connection description
 #'
 #' On Windows, operations use an existing authenticated Windows SMB session.
-#' On Unix-like systems, operations use `smbclient`.
+#' On macOS, operations mount the share with the native SMB client through
+#' AppleScript and then use the mounted filesystem. Linux operations use the
+#' separately installed Samba `smbclient` utility.
 #' @param host SMB server hostname.
 #' @param share Share name, separate from operation paths.
 #' @param user Optional login name.

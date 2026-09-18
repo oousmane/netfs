@@ -25,7 +25,9 @@ A \code{netfs_smb} connection.
 }
 \description{
 On Windows, operations use an existing authenticated Windows SMB session.
-On Unix-like systems, operations use \code{smbclient}.
+On macOS, operations mount the share with the native SMB client through
+AppleScript and then use the mounted filesystem. Linux operations use the
+separately installed Samba \code{smbclient} utility.
 }
 \examples{
 smb("fileserver", "DATA")
