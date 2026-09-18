@@ -1,0 +1,25 @@
+Package: netfs
+Type: Package
+Title: Unified Filesystem Operations for Local and Remote Connections
+Version: 0.1.0
+Authors@R: person("netfs", "authors", email = "maintainers@example.com", role = c("aut", "cre"))
+Description: Provides a small, consistent interface for filesystem operations on
+    local paths and remote FTP, SSH, and SMB connections. Local operations
+    delegate to 'fs'; remote operations use mature protocol tools.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+    curl,
+    fs,
+    keyring,
+    processx,
+    rlang,
+    tibble
+Suggests:
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.1.0

@@ -1,0 +1,85 @@
+---
+title: "Getting started with netfs"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with netfs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup}
+library(netfs)
+```
+
+## Local filesystem operations
+
+With no connection, netfs delegates directly to `fs`.
+
+```{r}
+dir_ls(tempdir())
+file_exists(tempdir())
+```
+
+## Connection objects
+
+Constructors validate configuration without opening a connection. Passwords
+are stored through `keyring` and are not retained in connection objects.
+
+```{r, eval=FALSE}
+server <- ftp("ftp.example.org", user = "analyst")
+set_creds(server)
+```
+
+Set `NETFS_KEYRING` in `.Renviron` to select a named keyring. Do not store the
+password itself in `.Renviron`.
+
+## SSH
+
+```{r, eval=FALSE}
+server <- ssh("server.example.org", user = "user")
+dir_ls("/data", con = server)
+```
+
+## FTP
+
+```{r, eval=FALSE}
+server <- ftp("ftp.example.org", user = "user")
+file_info("/data/input.csv", con = server)
+```
+
+## SMB
+
+```{r, eval=FALSE}
+server <- smb("fileserver", "DATA", user = "user")
+dir_ls("/2026", con = server)
+```
+
+## Uploading and downloading files
+
+`file_download()` copies from remote to local. `file_upload()` copies in the
+other direction. Both protect existing destinations unless `overwrite = TRUE`.
+
+`file_transfer()` copies between two remote connections through a temporary
+local staging file. It preserves the source and removes the temporary file
+after success or failure.
+
+```{r, eval=FALSE}
+file_transfer(
+  "/incoming/report.csv",
+  "/archive/",
+  from = ftp_server,
+  to = smb_server
+)
+```
+
+## Backend capabilities
+
+```{r}
+netfs_capabilities()
+```
+
+## Error handling
+
+Remote failures inherit from `netfs_error`; specific subclasses distinguish
+authentication, missing paths, unavailable clients, timeouts, and unsupported
+operations.
