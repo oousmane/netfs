@@ -24,8 +24,8 @@
   abort_netfs_connection(sprintf("FTP %s failed on `%s`.", action, con$host), parent = e)
 }
 
-.ftp_request <- function(con, path, action, fun) {
-  tryCatch(fun(.ftp_url(con, path), .ftp_handle(con)), error = function(e) .ftp_translate(e, con, path, action))
+.ftp_request <- function(con, path, action, fun, handle = .ftp_handle(con)) {
+  tryCatch(fun(.ftp_url(con, path), handle), error = function(e) .ftp_translate(e, con, path, action))
 }
 
 .file_download.netfs_ftp <- function(con, path, local, ...) {
@@ -44,7 +44,8 @@
 
 .dir_ls.netfs_ftp <- function(con, path, ...) {
   handle <- .ftp_handle(con); curl::handle_setopt(handle, dirlistonly = TRUE)
-  response <- .ftp_request(con, paste0(path, "/"), "listing", function(url, handle) curl::curl_fetch_memory(url, handle = handle))
+  response <- .ftp_request(con, paste0(path, "/"), "listing",
+    function(url, handle) curl::curl_fetch_memory(url, handle = handle), handle = handle)
   names <- strsplit(rawToChar(response$content), "\r?\n")[[1L]]
   vapply(names[nzchar(names)], function(x) .remote_path_join(path, x), character(1))
 }
@@ -64,7 +65,7 @@
 
 .ftp_quote <- function(con, command, path, action) {
   handle <- .ftp_handle(con); curl::handle_setopt(handle, quote = sprintf("%s %s", command, path), nobody = TRUE)
-  .ftp_request(con, "/", action, function(url, handle) curl::curl_fetch_memory(url, handle = handle))
+  .ftp_request(con, "/", action, function(url, handle) curl::curl_fetch_memory(url, handle = handle), handle = handle)
   invisible(path)
 }
 .dir_create.netfs_ftp <- function(con, path, ...) .ftp_quote(con, "MKD", path, "directory creation")
@@ -72,6 +73,6 @@
 .file_delete.netfs_ftp <- function(con, path, ...) .ftp_quote(con, "DELE", path, "file deletion")
 .file_move.netfs_ftp <- function(con, path, new_path, ...) {
   handle <- .ftp_handle(con); curl::handle_setopt(handle, quote = c(sprintf("RNFR %s", path), sprintf("RNTO %s", new_path)), nobody = TRUE)
-  .ftp_request(con, "/", "rename", function(url, handle) curl::curl_fetch_memory(url, handle = handle)); invisible(new_path)
+  .ftp_request(con, "/", "rename", function(url, handle) curl::curl_fetch_memory(url, handle = handle), handle = handle); invisible(new_path)
 }
 .file_copy.netfs_ftp <- function(con, path, new_path, ...) abort_netfs_unsupported("Server-side file copy is not supported by the FTP backend.", operation = "file_copy")
