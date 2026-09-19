@@ -5,6 +5,11 @@
     rlang::abort("`timeout` must be a positive number of seconds.", class = "netfs_validation_error")
   }
   if (!nzchar(Sys.which(command))) abort_netfs_backend_unavailable(sprintf("Required executable `%s` is unavailable.", command), command = command)
+  # Force all lazily-evaluated arguments here, outside the tryCatch below, so
+  # an error while constructing them (e.g. path validation deep inside a
+  # caller's `args` expression) surfaces with its own class and message
+  # instead of being caught and rewritten as a process-execution failure.
+  force(args); force(env); force(redact); force(error_on_status); list(...)
   result <- tryCatch(
     processx::run(command, args = args, error_on_status = FALSE,
       timeout = if (is.null(timeout)) Inf else timeout, env = env, ...),

@@ -20,3 +20,15 @@ test_that("timeouts produce structured errors", {
     class = "netfs_timeout"
   )
 })
+
+test_that("an error while lazily constructing args is not misreported as a failed execution", {
+  rscript <- file.path(R.home("bin"), "Rscript")
+  # `args` is passed as an unevaluated expression, exactly like the
+  # sprintf(...)/.smb_path(path) chain callers build for `command` in
+  # .smb_run() — it must only be forced (and any error from it surfaced
+  # under its own class) outside the process-execution tryCatch.
+  expect_error(
+    netfs:::.run_command(rscript, netfs:::.check_scalar_character(c("a", "b"), "path")),
+    class = "netfs_validation_error"
+  )
+})
