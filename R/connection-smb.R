@@ -1,9 +1,10 @@
 #' Create an SMB connection description
 #'
 #' On Windows, operations use an existing authenticated Windows SMB session.
-#' On macOS, operations mount the share with the native SMB client through
-#' AppleScript and then use the mounted filesystem. Linux operations use the
-#' separately installed Samba `smbclient` utility.
+#' On macOS and Linux, operations use the separately installed Samba
+#' `smbclient` utility (on macOS, install it with Homebrew via
+#' `brew install samba`; the MacPorts `samba4` port is known to crash on
+#' connect on some macOS versions).
 #' @param host SMB server hostname.
 #' @param share Share name, separate from operation paths.
 #' @param user Optional login name.

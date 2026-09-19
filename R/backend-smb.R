@@ -2,7 +2,16 @@
 .smb_path <- function(path) gsub("/", "\\\\", sub("^/", "", .netfs_path_normalize(path)), fixed = TRUE)
 
 .smb_common_args <- function(con) {
-  args <- c(.smb_service(con), "-g")
+  # smbclient's -g/--grepable does not change `ls`/`dir` output on macOS/Linux
+  # builds (verified against 4.24.x); .smb_listing_pattern parses the
+  # standard columnar format instead.
+  # smbclient's default send-buffer is small enough that a slow or lossy
+  # connection can stall long enough to trip the server's own I/O timeout
+  # mid-transfer (observed as NT_STATUS_IO_TIMEOUT on a 36MB upload over a
+  # ~550kB/s link). A larger buffer avoids that; override via
+  # `smb(..., send_buffer = <bytes>)` if a specific value is needed.
+  send_buffer <- if (is.null(con$options$send_buffer)) 130048L else con$options$send_buffer
+  args <- c(.smb_service(con), "-b", as.character(send_buffer))
   if (!is.null(con$user)) args <- c(args, "-U", paste0(if (is.null(con$domain)) "" else paste0(con$domain, "\\"), con$user)) else args <- c(args, "-N")
   args
 }
@@ -10,121 +19,82 @@
 .require_smbclient <- function() {
   if (.has_smbclient()) return(invisible(TRUE))
 
-  message <- paste0(
-    "SMB operations require the Samba smbclient utility. Install your ",
-    "distribution's smbclient or samba-client package first. A Samba server ",
-    "is needed only when this machine will host shares. See ",
-    "https://www.samba.org/samba/docs/current/man-html/smbclient.1.html."
-  )
+  message <- if (.is_macos()) {
+    paste0(
+      "SMB operations require the Samba smbclient utility. Install it with ",
+      "Homebrew (`brew install samba`) first; the MacPorts `samba4` port is ",
+      "known to crash on connect on some macOS versions. A Samba server is ",
+      "needed only when this machine will host shares. See ",
+      "https://www.samba.org/samba/docs/current/man-html/smbclient.1.html."
+    )
+  } else {
+    paste0(
+      "SMB operations require the Samba smbclient utility. Install your ",
+      "distribution's smbclient or samba-client package first. A Samba server ",
+      "is needed only when this machine will host shares. See ",
+      "https://www.samba.org/samba/docs/current/man-html/smbclient.1.html."
+    )
+  }
   abort_netfs_backend_unavailable(message, command = "smbclient")
 }
 
 .is_macos <- function() identical(tolower(Sys.info()[["sysname"]]), "darwin")
 .is_windows <- function() identical(.Platform$OS.type, "windows")
-.smb_uses_native_fs <- function() .is_windows() || .is_macos()
+.smb_uses_native_fs <- function() .is_windows()
 
-.applescript_string <- function(x) {
-  x <- gsub("\\", "\\\\", x, fixed = TRUE)
-  x <- gsub('"', '\\"', x, fixed = TRUE)
-  paste0('"', x, '"')
-}
-
-.smb_macos_mount <- function(con) {
-  .check_connection(con)
-  password <- .connection_password(con)
-  username <- con$user
-  if (!is.null(username) && !is.null(con$domain)) {
-    username <- paste0(con$domain, "\\", username)
-  }
-  service <- paste0(
-    "smb://",
-    utils::URLencode(con$host, reserved = TRUE),
-    "/",
-    utils::URLencode(con$share, reserved = TRUE)
-  )
-
-  command <- paste0("set mountedVolume to mount volume ", .applescript_string(service))
-  if (!is.null(username)) {
-    command <- paste0(command, " as user name ", .applescript_string(username))
-  }
-  if (!is.null(password)) {
-    command <- paste0(command, " with password ", .applescript_string(password))
-  }
-  script <- paste(command, "return POSIX path of mountedVolume", sep = "\n")
-  result <- .run_command(
-    "/usr/bin/osascript",
-    args = "-",
-    stdin = script,
-    timeout = 60,
-    redact = password %||% ""
-  )
-  if (result$status != 0L) {
-    detail <- paste(result$stderr, result$stdout)
-    if (grepl("auth|password|permission", detail, ignore.case = TRUE)) {
-      abort_netfs_auth(
-        sprintf("SMB authentication to `%s` failed.", con$host),
-        result = result
-      )
-    }
-    abort_netfs_connection(
-      sprintf("macOS could not mount SMB share `%s/%s`.", con$host, con$share),
-      result = result
-    )
-  }
-  mount_path <- trimws(result$stdout)
-  if (!nzchar(mount_path)) {
-    abort_netfs_connection(
-      sprintf("macOS mounted SMB share `%s/%s` without returning its path.", con$host, con$share),
-      result = result
-    )
-  }
-  mount_path
-}
-
-.smb_native_path <- function(con, path) {
-  if (.is_windows()) return(.smb_to_unc(con, path))
-  root <- .smb_macos_mount(con)
-  relative <- sub("^/", "", .netfs_path_normalize(path))
-  if (!nzchar(relative)) return(root)
-  parts <- strsplit(relative, "/", fixed = TRUE)[[1L]]
-  do.call(fs::path, as.list(c(root, parts)))
-}
+.smb_native_path <- function(con, path) .smb_to_unc(con, path)
 
 .smb_run <- function(con, command) {
   .require_smbclient()
   password <- .connection_password(con)
   secrets <- c(password %||% "")
-  env <- if (is.null(password)) NULL else c(PASSWD = password)
+  env <- if (is.null(password)) NULL else c("current", PASSWD = password)
   result <- .run_command("smbclient", c(.smb_common_args(con), "-c", command), env = env, redact = secrets)
   if (result$status == 0L) return(result)
   detail <- paste(result$stderr, result$stdout)
   if (grepl("LOGON_FAILURE|ACCESS_DENIED", detail)) abort_netfs_auth(sprintf("SMB authentication to `%s` failed.", con$host), result = result)
-  if (grepl("OBJECT_NAME_NOT_FOUND|NO_SUCH_FILE", detail)) abort_netfs_not_found(sprintf("SMB path was not found on `%s`.", con$host), result = result)
-  abort_netfs_connection(sprintf("SMB operation on `%s` failed.", con$host), result = result)
+  if (grepl("OBJECT_NAME_NOT_FOUND|NO_SUCH_FILE|NOT_A_DIRECTORY", detail)) abort_netfs_not_found(sprintf("SMB path was not found on `%s`.", con$host), result = result)
+  detail <- trimws(detail)
+  message <- if (nzchar(detail)) {
+    sprintf("SMB operation on `%s` failed: %s", con$host, detail)
+  } else {
+    sprintf("SMB operation on `%s` failed.", con$host)
+  }
+  abort_netfs_connection(message, result = result)
 }
+
+.smb_listing_pattern <- "^\\s*(.*?\\S)\\s{2,}([A-Za-z]*)\\s+(-?\\d+)\\s+(\\S.*)$"
 
 .smb_parse_listing <- function(text, base = "/") {
   lines <- strsplit(text, "\r?\n")[[1L]]
-  fields <- strsplit(lines[nzchar(lines)], "|", fixed = TRUE)
-  fields <- fields[vapply(fields, length, integer(1)) >= 4L]
+  fields <- regmatches(lines, regexec(.smb_listing_pattern, lines, perl = TRUE))
+  fields <- fields[vapply(fields, length, integer(1)) == 5L]
   if (!length(fields)) return(.new_remote_info(character()))
   name <- vapply(fields, `[[`, character(1), 2L)
   keep <- !name %in% c(".", "..")
   fields <- fields[keep]; name <- name[keep]
-  type <- vapply(fields, function(x) if (grepl("D", x[[1L]], fixed = TRUE)) "directory" else "file", character(1))
-  size <- suppressWarnings(as.numeric(vapply(fields, `[[`, character(1), 3L)))
+  if (!length(fields)) return(.new_remote_info(character()))
+  attrs <- vapply(fields, `[[`, character(1), 3L)
+  type <- ifelse(grepl("D", attrs, fixed = TRUE), "directory", "file")
+  size <- suppressWarnings(as.numeric(vapply(fields, `[[`, character(1), 4L)))
   .new_remote_info(unname(vapply(name, function(x) .remote_path_join(base, x), character(1))), type, size)
 }
 
-.dir_ls.netfs_smb <- function(con, path, ...) {
+.dir_info.netfs_smb <- function(con, path, ...) {
   if (.smb_uses_native_fs()) {
     root <- .smb_native_path(con, path)
-    names <- fs::dir_ls(root, ...)
-    return(vapply(basename(names), function(x) .remote_path_join(path, x), character(1)))
+    x <- fs::dir_info(root, ...)
+    remote_path <- unname(vapply(basename(as.character(x$path)), function(n) .remote_path_join(path, n), character(1)))
+    return(.new_remote_info(remote_path, as.character(x$type), as.numeric(x$size), x$modification_time))
   }
-  info <- .smb_parse_listing(.smb_run(con, sprintf("ls %s", shQuote(.smb_path(path), type = "cmd")))$stdout, path)
-  info$path
+  target <- .smb_path(path)
+  # smbclient's `ls <name>` treats <name> as a mask against the current
+  # directory's entries, not a directory to enter — without a trailing
+  # wildcard it matches only the directory's own entry, not its contents.
+  command <- if (nzchar(target)) sprintf("ls %s", shQuote(paste0(target, "\\*"), type = "cmd")) else "ls"
+  .smb_parse_listing(.smb_run(con, command)$stdout, path)
 }
+.dir_ls.netfs_smb <- function(con, path, ...) as.character(.dir_info.netfs_smb(con, path, ...)$path)
 .file_exists.netfs_smb <- function(con, path, ...) {
   if (.smb_uses_native_fs()) return(fs::file_exists(.smb_native_path(con, path)))
   tryCatch({ .smb_run(con, sprintf("allinfo %s", shQuote(.smb_path(path), type = "cmd"))); TRUE }, netfs_not_found = function(e) FALSE)

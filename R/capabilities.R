@@ -3,7 +3,6 @@
 .has_sftp <- function() .has_command("sftp")
 .has_scp <- function() .has_command("scp")
 .has_smbclient <- function() .has_command("smbclient")
-.has_macos_smb <- function() .is_macos() && .has_command("osascript")
 .has_curl <- function() isTRUE(curl::curl_version()$version != "")
 
 #' Report netfs backend capabilities
@@ -18,17 +17,11 @@
 #' @export
 netfs_capabilities <- function(con = NULL) {
   if (is.null(con)) {
-    smb_engine <- if (.is_windows()) {
-      "Windows UNC"
-    } else if (.is_macos()) {
-      "macOS SMB"
-    } else {
-      "smbclient"
-    }
+    smb_engine <- if (.is_windows()) "Windows UNC" else "smbclient"
     return(tibble::tibble(
       backend = c("local", "ftp", "ssh", "smb"),
       available = c(TRUE, .has_curl(), .has_ssh() && .has_scp(),
-        .is_windows() || .has_macos_smb() || .has_smbclient()),
+        .is_windows() || .has_smbclient()),
       engine = c("fs", "libcurl", "OpenSSH", smb_engine)
     ))
   }

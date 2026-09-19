@@ -120,20 +120,16 @@ connection constructor for compatibility, netfs immediately stores it through
 | FTP / FTPS | libcurl | Included through the `curl` package |
 | SSH / SFTP | OpenSSH | Requires `ssh` and `scp` executables |
 | SMB on Linux | Samba `smbclient` | Install the distribution's `smbclient` or `samba-client` package |
-| SMB on macOS | Native SMB mount | `smb()` mounts the share through macOS and operates on the mounted filesystem |
+| SMB on macOS | Samba `smbclient` | Install with Homebrew: `brew install samba` |
 | SMB on Windows | Windows UNC | Uses the current authenticated Windows session |
 
-On Linux, install the Samba client utility using your distribution's package
-manager before using `smb()`. The full Samba server is needed only if the
-Linux machine will host SMB shares. See the
+On Linux and macOS, install the Samba client utility before using `smb()`.
+On Linux, use your distribution's package manager. On macOS, install it with
+Homebrew (`brew install samba`) — the MacPorts `samba4` port is known to
+crash on connect (an internal `talloc`/`tevent` abort) on some macOS
+versions, even freshly rebuilt. The full Samba server is needed only if
+this machine will host SMB shares. See the
 [`smbclient` documentation](https://www.samba.org/samba/docs/current/man-html/smbclient.1.html).
-
-macOS already includes native SMB support. Calls through `smb()` mount the
-share from R with the native client, then use the mounted filesystem for file
-operations. Passwords are sent to AppleScript over standard input rather than
-placed in process arguments. macOS manages and may retain the mounted volume
-under `/Volumes`. See
-[Apple's SMB connection guide](https://support.apple.com/guide/mac-help/mchlp1140/mac).
 
 Inspect the current system and a connection without contacting a server:
 
