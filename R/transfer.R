@@ -29,6 +29,7 @@ file_download <- function(path, local = basename(path), con, overwrite = FALSE, 
   .check_connection(con); .check_scalar_logical(overwrite, "overwrite")
   .check_scalar_character(path, "path")
   .check_scalar_character(local, "local")
+  local <- fs::path_expand(local)
   path <- .netfs_path_normalize(path)
   if (.has_trailing_path_separator(local) || .is_dir(local)) {
     filename <- .remote_path_basename(path)
@@ -52,7 +53,7 @@ file_download <- function(path, local = basename(path), con, overwrite = FALSE, 
 #' @param overwrite Replace an existing remote destination. When `FALSE`, an
 #'   existing destination raises `netfs_destination_exists`.
 #' @inheritParams file_download
-#' @return The normalized remote destination, invisibly.
+#' @return The normalized remote destination, invisibly, as an `fs_path`.
 #' @family filesystem operations
 #' @examples
 #' \dontrun{
@@ -74,6 +75,7 @@ file_upload <- function(local, path, con, overwrite = FALSE, ...) {
   .check_connection(con); .check_scalar_logical(overwrite, "overwrite")
   .check_scalar_character(local, "local")
   .check_scalar_character(path, "path")
+  local <- fs::path_expand(local)
   if (!fs::file_exists(local)) abort_netfs_not_found(sprintf("Local source `%s` does not exist.", local), path = local)
   remote_directory <- .has_trailing_path_separator(path) || .is_dir(path, con)
   path <- .netfs_path_normalize(path)
@@ -88,7 +90,7 @@ file_upload <- function(local, path, con, overwrite = FALSE, ...) {
     )
   }
   .file_upload(con, local, path, ...)
-  invisible(path)
+  invisible(fs::as_fs_path(path))
 }
 
 #' Transfer a file between remote connections
@@ -103,7 +105,7 @@ file_upload <- function(local, path, con, overwrite = FALSE, ...) {
 #' @param from Source connection.
 #' @param to Destination connection.
 #' @param overwrite Replace an existing destination file.
-#' @return The normalized remote destination path, invisibly.
+#' @return The normalized remote destination path, invisibly, as an `fs_path`.
 #' @family filesystem operations
 #' @examples
 #' \dontrun{
@@ -153,5 +155,5 @@ file_transfer <- function(path, new_path = basename(path), from, to,
     con = to,
     overwrite = overwrite
   )
-  invisible(new_path)
+  invisible(fs::as_fs_path(new_path))
 }

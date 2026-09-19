@@ -1,4 +1,10 @@
 .dir_ls <- function(con, path, ...) UseMethod(".dir_ls")
+.dir_info <- function(con, path, ...) UseMethod(".dir_info")
+.dir_info.default <- function(con, path, ...) {
+  paths <- .dir_ls(con, path, ...)
+  if (!length(paths)) return(.new_remote_info(character()))
+  do.call(rbind, lapply(paths, function(p) .file_info(con, p)))
+}
 .dir_exists <- function(con, path, ...) UseMethod(".dir_exists")
 .dir_create <- function(con, path, ...) UseMethod(".dir_create")
 .dir_delete <- function(con, path, ...) UseMethod(".dir_delete")

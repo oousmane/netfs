@@ -20,7 +20,7 @@ existing destination raises \code{netfs_destination_exists}.}
 \item{...}{Backend arguments.}
 }
 \value{
-The normalized remote destination, invisibly.
+The normalized remote destination, invisibly, as an \code{fs_path}.
 }
 \description{
 Upload a local file

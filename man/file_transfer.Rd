@@ -25,7 +25,7 @@ directory or ends in \code{/}, the basename of \code{path} is appended.}
 \item{overwrite}{Replace an existing destination file.}
 }
 \value{
-The normalized remote destination path, invisibly.
+The normalized remote destination path, invisibly, as an \code{fs_path}.
 }
 \description{
 \code{file_transfer()} moves data through a temporary local file. It does not

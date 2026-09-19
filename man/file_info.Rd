@@ -7,7 +7,7 @@
 file_info(path, con = NULL, ...)
 }
 \arguments{
-\item{path}{A local or remote path.}
+\item{path}{One or more local or remote paths.}
 
 \item{con}{\code{NULL} for local \code{fs} behavior, or a netfs connection.}
 
@@ -15,7 +15,12 @@ file_info(path, con = NULL, ...)
 }
 \value{
 Locally, the result of \code{\link[fs:file_info]{fs::file_info()}}. Remotely, a tibble with
-\code{path}, \code{type}, \code{size}, and \code{modification_time} columns.
+one row per element of \code{path} and \code{path}, \code{type}, \code{size}, and
+\code{modification_time} columns, typed like their \code{\link[fs:file_info]{fs::file_info()}}
+counterparts (\code{path} an \code{fs_path}, \code{type} a factor of
+\code{\link[fs:file_info]{fs::file_info()}}'s levels, \code{size} an \code{fs_bytes}). Backends that cannot
+determine a value report \code{NA}; a remote \code{type} string outside the known
+levels also reports \code{NA}.
 }
 \description{
 Retrieve file metadata

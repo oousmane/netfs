@@ -92,6 +92,6 @@ test_that("downloads preserve existing files with a numbered name", {
   )
 
   result <- file_download("/reports/report.csv", destination, ssh("host"))
-  expect_equal(seen$local, file.path(directory, "report-1.csv"))
-  expect_equal(result, fs::path_abs(file.path(directory, "report-1.csv")))
+  expect_equal(as.character(seen$local), as.character(fs::path_expand(file.path(directory, "report-1.csv"))))
+  expect_equal(result, fs::as_fs_path(fs::path_abs(fs::path_expand(file.path(directory, "report-1.csv")))))
 })

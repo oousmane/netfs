@@ -16,7 +16,7 @@ file_move(path, new_path, con = NULL, ...)
 \item{...}{Arguments passed to \code{fs::dir_ls()} locally or to the backend.}
 }
 \value{
-The destination path, invisibly.
+The destination path, invisibly, as an \code{fs_path}.
 }
 \description{
 Move a file within one filesystem

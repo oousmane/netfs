@@ -9,5 +9,5 @@ test_that("SSH listing parsing handles spaces", {
     .ssh_run = function(con, script, ...) list(status = 0L, stdout = "/data/a b\n/data/c\n", stderr = ""),
     .package = "netfs"
   )
-  expect_equal(dir_ls("/data", con = ssh("host")), c("/data/a b", "/data/c"))
+  expect_equal(dir_ls("/data", con = ssh("host")), fs::as_fs_path(c("/data/a b", "/data/c")))
 })

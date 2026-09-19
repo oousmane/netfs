@@ -4,7 +4,7 @@
 \alias{dir_ls}
 \title{List directory contents}
 \usage{
-dir_ls(path = ".", con = NULL, ...)
+dir_ls(path = ".", con = NULL, type = "any", ...)
 }
 \arguments{
 \item{path}{A local or remote path. For \code{dir_ls()}, a connection supplied as
@@ -12,10 +12,19 @@ the first argument is shorthand for listing that connection's root.}
 
 \item{con}{\code{NULL} for local \code{fs} behavior, or a netfs connection.}
 
+\item{type}{For remote connections, one or more of \code{\link[fs:file_info]{fs::file_info()}}'s
+type levels (e.g. \code{"file"}, \code{"directory"}) to filter the listing to;
+\code{"any"} (the default) returns everything. Filtering by a type other
+than \code{"any"} costs an extra round trip per entry on backends that can't
+determine type from the directory listing itself (currently FTP, and
+SSH via the default fallback); SMB determines it from the listing at no
+extra cost. An entry whose type can't be determined (\code{NA}) never
+matches a specific type.}
+
 \item{...}{Arguments passed to \code{fs::dir_ls()} locally or to the backend.}
 }
 \value{
-A path vector. Remote paths use forward slashes.
+An \code{fs_path} vector. Remote paths use forward slashes.
 }
 \description{
 List directory contents

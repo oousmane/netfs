@@ -14,7 +14,8 @@ dir_delete(path, con = NULL, ...)
 \item{...}{Arguments passed to \code{fs::dir_ls()} locally or to the backend.}
 }
 \value{
-The path, invisibly. Remote deletion does not recursively delete contents.
+The path, invisibly, as an \code{fs_path}. Remote deletion does not
+recursively delete contents.
 }
 \description{
 Delete a directory

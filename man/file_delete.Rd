@@ -14,7 +14,7 @@ file_delete(path, con = NULL, ...)
 \item{...}{Arguments passed to \code{fs::dir_ls()} locally or to the backend.}
 }
 \value{
-The path, invisibly.
+The path, invisibly, as an \code{fs_path}.
 }
 \description{
 Delete a file

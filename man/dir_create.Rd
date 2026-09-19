@@ -14,7 +14,8 @@ dir_create(path, con = NULL, ...)
 \item{...}{Arguments passed to \code{fs::dir_ls()} locally or to the backend.}
 }
 \value{
-The path, invisibly. Remote creation is non-recursive unless explicitly supported by a backend argument.
+The path, invisibly, as an \code{fs_path}. Remote creation is
+non-recursive unless explicitly supported by a backend argument.
 }
 \description{
 Create a directory
