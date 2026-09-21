@@ -27,14 +27,6 @@
   sub("/[^/]+$", "", path)
 }
 
-.smb_to_unc <- function(con, path) {
-  .check_connection(con)
-  path <- .netfs_path_normalize(path)
-  suffix <- gsub("/", "\\", sub("^/", "", path), fixed = TRUE)
-  root <- paste0("\\\\", con$host, "\\", con$share)
-  if (!nzchar(suffix)) root else paste0(root, "\\", suffix)
-}
-
 .has_trailing_path_separator <- function(path) {
   grepl("[/\\\\]$", path)
 }

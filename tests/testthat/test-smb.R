@@ -1,163 +1,88 @@
-test_that("SMB machine listings normalize metadata", {
-  fixture <- paste0(
-    "  .                                   D        0  Mon Jan  1 00:00:00 2024\n",
-    "  ..                                  D        0  Mon Jan  1 00:00:00 2024\n",
-    "  file with spaces.txt                A      123  Mon Jan  1 00:00:00 2024\n",
-    "  folder                              D        0  Mon Jan  1 00:00:00 2024\n",
-    "  a_very_long_filename_that_overflows_the_padded_name_column.pdf      A 45725478  Mon Jan  1 00:00:00 2024\n",
-    "\t\t141537791 blocks of size 4096. 74507669 blocks available\n"
-  )
-  x <- netfs:::.smb_parse_listing(fixture, "/data")
-  expect_equal(as.character(x$path), c(
-    "/data/file with spaces.txt", "/data/folder",
-    "/data/a_very_long_filename_that_overflows_the_padded_name_column.pdf"
-  ))
-  expect_equal(as.character(x$type), c("file", "directory", "file"))
-  expect_equal(as.numeric(x$size), c(123, 0, 45725478))
+test_that("smb() builds a valid smbclientr connection with no duplicated fields", {
+  local_mocked_bindings(set_creds = function(...) invisible(NULL), .package = "smbclientr")
+  con <- smb("fileserver", "DATA", user = "alice", domain = "WORK")
+  expect_true(inherits(con, "netfs_smb"))
+  expect_true(inherits(con, "netfs_connection"))
+  expect_true(inherits(con, "smb_connection")) # the smbclientr class, reused directly
+  expect_equal(con$host, "fileserver")
+  expect_equal(con$share, "DATA")
+  expect_equal(con$user, "alice")
+  expect_equal(con$domain, "WORK")
 })
 
-test_that("remote file_info is typed like fs::file_info()", {
-  x <- netfs:::.smb_parse_listing(
-    "  report.csv                          A      123  Mon Jan  1 00:00:00 2024\n", "/data"
-  )
-  expect_s3_class(x$path, "fs_path")
-  expect_s3_class(x$type, "factor")
-  expect_equal(levels(x$type), netfs:::.remote_file_type_levels)
-  expect_s3_class(x$size, "fs_bytes")
-})
-
-test_that("SMB passwords are absent from argument construction", {
-  local_mocked_bindings(
-    .keyring_set_with_value = function(...) invisible(NULL),
-    .package = "netfs"
-  )
-  x <- smb("host", "share", user = "alice", password = "secret")
-  expect_null(x$password)
-  expect_false(any(grepl("secret", netfs:::.smb_common_args(x), fixed = TRUE)))
-})
-
-test_that("smbclient runs with a password inherit the parent PATH", {
+test_that("set_creds()/get_creds()/delete_creds() delegate to smbclientr for SMB connections", {
   con <- smb("fileserver", "DATA", user = "alice")
   seen <- new.env(parent = emptyenv())
   local_mocked_bindings(
-    .require_smbclient = function() invisible(TRUE),
-    .connection_password = function(...) "secret",
-    .run_command = function(command, args = character(), env = NULL, ...) {
-      seen$env <- env
-      list(status = 0L, stdout = "", stderr = "")
-    },
-    .package = "netfs"
+    set_creds = function(con, password = NULL, keyring = NULL) { seen$set <- password; invisible(con) },
+    get_creds = function(con, keyring = NULL) "secret",
+    delete_creds = function(con, keyring = NULL) { seen$deleted <- TRUE; invisible(con) },
+    .package = "smbclientr"
   )
-  netfs:::.smb_run(con, "ls")
-  expect_true("current" %in% seen$env)
-  expect_equal(unname(seen$env[names(seen$env) == "PASSWD"]), "secret")
+  # Qualified deliberately: netfs and smbclientr both export set_creds()/
+  # get_creds()/delete_creds() (smbclientr has its own, for standalone use),
+  # and an unqualified call here can resolve to smbclientr's under some
+  # test-execution contexts. netfs's own R code always calls
+  # smbclientr::set_creds() etc. explicitly, so this only matters for
+  # *calling code*, like this test, that isn't inside netfs's own namespace.
+  netfs::set_creds(con, "secret")
+  expect_equal(seen$set, "secret")
+  expect_equal(format(netfs::get_creds(con)), "<hidden>") # still netfs's own hidden-display wrapper
+  netfs::delete_creds(con)
+  expect_true(seen$deleted)
 })
 
-test_that("unrecognized SMB failures include the smbclient output in the message", {
-  con <- smb("fileserver", "DATA")
-  local_mocked_bindings(
-    .require_smbclient = function() invisible(TRUE),
-    .connection_password = function(...) NULL,
-    .run_command = function(...) list(status = 1L, stdout = "", stderr = "NT_STATUS_CONNECTION_REFUSED"),
-    .package = "netfs"
-  )
-  expect_error(
-    netfs:::.smb_run(con, "ls"),
-    "NT_STATUS_CONNECTION_REFUSED",
-    class = "netfs_connection_error"
-  )
-})
-
-test_that("dir_ls accepts a connection as remote-root shorthand", {
-  con <- smb("fileserver", "DATA")
-  local_mocked_bindings(
-    .dir_ls = function(con, path, ...) path,
-    .package = "netfs"
-  )
-  expect_equal(dir_ls(con), fs::as_fs_path("/"))
-  expect_equal(dir_ls(con = con), fs::as_fs_path("/"))
-})
-
-test_that("dir_ls on a subdirectory lists its contents, not just its own entry", {
+test_that("each SMB adapter method delegates to the matching smbclientr function", {
   con <- smb("fileserver", "DATA")
   seen <- new.env(parent = emptyenv())
   local_mocked_bindings(
-    .smb_run = function(con, command) { seen$command <- command; list(status = 0L, stdout = "") },
-    .package = "netfs"
+    dir_ls = function(path, con, type = "any", ...) { seen$dir_ls <- path; fs::as_fs_path("/data/a.txt") },
+    dir_info = function(path, con, type = "any", ...) { seen$dir_info <- path; tibble::tibble(path = fs::as_fs_path("/data/a.txt"), type = factor("file")) },
+    dir_exists = function(path, con) { seen$dir_exists <- path; c(x = TRUE) },
+    dir_create = function(path, con, ...) { seen$dir_create <- path; fs::as_fs_path(path) },
+    dir_delete = function(path, con) { seen$dir_delete <- path; fs::as_fs_path(path) },
+    file_exists = function(path, con) { seen$file_exists <- path; c(x = FALSE) },
+    file_delete = function(path, con) { seen$file_delete <- path; fs::as_fs_path(path) },
+    file_copy = function(path, new_path, con, ...) { seen$file_copy <- c(path, new_path); fs::as_fs_path(new_path) },
+    file_move = function(path, new_path, con) { seen$file_move <- c(path, new_path); fs::as_fs_path(new_path) },
+    file_info = function(path, con, ...) { seen$file_info <- path; tibble::tibble(path = fs::as_fs_path(path), type = factor("file")) },
+    file_download = function(path, local, con) { seen$download <- c(path, local); fs::as_fs_path(local) },
+    file_upload = function(local, path, con) { seen$upload <- c(local, path); fs::as_fs_path(path) },
+    .package = "smbclientr"
   )
-  netfs:::.dir_ls.netfs_smb(con, "/DEMANDES_DONNEES")
-  expect_match(seen$command, "\\\\\\*\"$")
 
-  netfs:::.dir_ls.netfs_smb(con, "/")
-  expect_equal(seen$command, "ls")
+  expect_equal(netfs:::.dir_ls.netfs_smb(con, "/data"), "/data/a.txt")
+  expect_equal(seen$dir_ls, "/data")
+  netfs:::.dir_info.netfs_smb(con, "/data"); expect_equal(seen$dir_info, "/data")
+  netfs:::.dir_exists.netfs_smb(con, "/data"); expect_equal(seen$dir_exists, "/data")
+  netfs:::.dir_create.netfs_smb(con, "/data"); expect_equal(seen$dir_create, "/data")
+  netfs:::.dir_delete.netfs_smb(con, "/data"); expect_equal(seen$dir_delete, "/data")
+  netfs:::.file_exists.netfs_smb(con, "/data/a.txt"); expect_equal(seen$file_exists, "/data/a.txt")
+  netfs:::.file_delete.netfs_smb(con, "/data/a.txt"); expect_equal(seen$file_delete, "/data/a.txt")
+  netfs:::.file_copy.netfs_smb(con, "/a.txt", "/b.txt"); expect_equal(seen$file_copy, c("/a.txt", "/b.txt"))
+  netfs:::.file_move.netfs_smb(con, "/a.txt", "/b.txt"); expect_equal(seen$file_move, c("/a.txt", "/b.txt"))
+  netfs:::.file_info.netfs_smb(con, "/data/a.txt"); expect_equal(seen$file_info, "/data/a.txt")
+  netfs:::.file_download.netfs_smb(con, "/data/a.txt", "/tmp/a.txt"); expect_equal(seen$download, c("/data/a.txt", "/tmp/a.txt"))
+  netfs:::.file_upload.netfs_smb(con, "/tmp/a.txt", "/data/a.txt"); expect_equal(seen$upload, c("/tmp/a.txt", "/data/a.txt"))
 })
 
-test_that("dir_ls(type=) filters by type without extra round trips on SMB", {
+test_that("smbclientr conditions are translated to netfs's own condition classes", {
   con <- smb("fileserver", "DATA")
-  fixture <- paste0(
-    "  a.txt                               A       10  Mon Jan  1 00:00:00 2024\n",
-    "  sub                                  D        0  Mon Jan  1 00:00:00 2024\n"
+  cases <- list(
+    list(smbclientr_class = "smbclientr_not_found", netfs_class = "netfs_not_found"),
+    list(smbclientr_class = "smbclientr_auth_error", netfs_class = "netfs_auth_error"),
+    list(smbclientr_class = "smbclientr_permission_error", netfs_class = "netfs_permission_error"),
+    list(smbclientr_class = "smbclientr_timeout", netfs_class = "netfs_timeout"),
+    list(smbclientr_class = "smbclientr_backend_unavailable", netfs_class = "netfs_backend_unavailable"),
+    list(smbclientr_class = "smbclientr_unsupported", netfs_class = "netfs_unsupported"),
+    list(smbclientr_class = "smbclientr_destination_exists", netfs_class = "netfs_destination_exists"),
+    list(smbclientr_class = "smbclientr_connection_error", netfs_class = "netfs_connection_error")
   )
-  calls <- 0L
-  local_mocked_bindings(
-    .smb_run = function(con, command) { calls <<- calls + 1L; list(status = 0L, stdout = fixture) },
-    .package = "netfs"
-  )
-  expect_equal(dir_ls("/data", con = con, type = "file"), fs::as_fs_path("/data/a.txt"))
-  expect_equal(dir_ls("/data", con = con, type = "directory"), fs::as_fs_path("/data/sub"))
-  expect_equal(calls, 2L)
-})
-
-test_that("remote mutating operations return fs_path like their fs counterparts", {
-  con <- smb("fileserver", "DATA")
-  local_mocked_bindings(
-    .dir_create = function(con, path, ...) invisible(path),
-    .dir_delete = function(con, path, ...) invisible(path),
-    .file_delete = function(con, path, ...) invisible(path),
-    .file_copy = function(con, path, new_path, ...) invisible(new_path),
-    .file_move = function(con, path, new_path, ...) invisible(new_path),
-    .package = "netfs"
-  )
-  expect_equal(dir_create("/data", con = con), fs::as_fs_path("/data"))
-  expect_equal(dir_delete("/data", con = con), fs::as_fs_path("/data"))
-  expect_equal(file_delete("/data/a.csv", con = con), fs::as_fs_path("/data/a.csv"))
-  expect_equal(file_copy("/data/a.csv", "/data/b.csv", con = con), fs::as_fs_path("/data/b.csv"))
-  expect_equal(file_move("/data/a.csv", "/data/b.csv", con = con), fs::as_fs_path("/data/b.csv"))
-})
-
-test_that("missing Linux SMB clients provide installation guidance", {
-  local_mocked_bindings(
-    .has_smbclient = function() FALSE,
-    .is_macos = function() FALSE,
-    .package = "netfs"
-  )
-
-  expect_error(
-    netfs:::.require_smbclient(),
-    "smbclient or samba-client",
-    class = "netfs_backend_unavailable"
-  )
-})
-
-test_that("missing macOS SMB clients suggest Homebrew installation", {
-  local_mocked_bindings(
-    .has_smbclient = function() FALSE,
-    .is_macos = function() TRUE,
-    .package = "netfs"
-  )
-
-  expect_error(
-    netfs:::.require_smbclient(),
-    "brew install samba",
-    class = "netfs_backend_unavailable"
-  )
-})
-
-test_that("macOS SMB operations use smbclient rather than native mounting", {
-  local_mocked_bindings(
-    .is_windows = function() FALSE,
-    .is_macos = function() TRUE,
-    .package = "netfs"
-  )
-  expect_false(netfs:::.smb_uses_native_fs())
+  for (case in cases) {
+    local_mocked_bindings(
+      dir_ls = function(...) rlang::abort("boom", class = c(case$smbclientr_class, "smbclientr_error")),
+      .package = "smbclientr"
+    )
+    expect_error(netfs:::.dir_ls.netfs_smb(con, "/data"), class = case$netfs_class)
+  }
 })

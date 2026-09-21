@@ -119,17 +119,15 @@ connection constructor for compatibility, netfs immediately stores it through
 | Local | `fs` | Always available when the package is installed |
 | FTP / FTPS | libcurl | Included through the `curl` package |
 | SSH / SFTP | OpenSSH | Requires `ssh` and `scp` executables |
-| SMB on Linux | Samba `smbclient` | Install the distribution's `smbclient` or `samba-client` package |
-| SMB on macOS | Samba `smbclient` | Install with Homebrew: `brew install samba` |
-| SMB on Windows | Windows UNC | Uses the current authenticated Windows session |
+| SMB (all platforms) | [`smbclientr`](https://github.com/oousmane/smbclientr) | An optional (`Suggests`) dependency; install it to use `smb()` |
 
-On Linux and macOS, install the Samba client utility before using `smb()`.
-On Linux, use your distribution's package manager. On macOS, install it with
-Homebrew (`brew install samba`) — the MacPorts `samba4` port is known to
-crash on connect (an internal `talloc`/`tevent` abort) on some macOS
-versions, even freshly rebuilt. The full Samba server is needed only if
-this machine will host SMB shares. See the
-[`smbclient` documentation](https://www.samba.org/samba/docs/current/man-html/smbclient.1.html).
+`smb()` delegates entirely to the `smbclientr` package, which provides its
+own `fs`-style interface to SMB shares: Samba `smbclient` on Linux and macOS
+(install with Homebrew — `brew install samba`; the MacPorts `samba4` port is
+known to crash on connect on some macOS versions), and native Windows
+UNC/filesystem support on Windows. `netfs` translates `smbclientr`'s errors
+into its own condition classes and otherwise stays out of SMB protocol
+mechanics entirely. See `smbclientr`'s own documentation for backend details.
 
 Inspect the current system and a connection without contacting a server:
 
@@ -141,9 +139,10 @@ netfs_capabilities(server)
 ## Current limitations
 
 - Remote operations depend on the capabilities of the selected backend.
-- Server-side `file_copy()` is unavailable for SSH, FTP, and the Linux
-  `smbclient`; it fails with `netfs_unsupported` instead of downloading and
-  re-uploading the file.
+- Server-side `file_copy()` is unavailable for SSH and FTP; it fails with
+  `netfs_unsupported` instead of downloading and re-uploading the file. SMB
+  supports it (via `smbclientr`, using `smbclient`'s `scopy` or native
+  Windows copy).
 - `file_transfer()` supports cross-connection transfers through temporary
   local staging. It is not a direct server-to-server operation.
 - Password authentication for command-line SSH is not injected into process

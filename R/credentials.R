@@ -91,6 +91,9 @@ str.netfs_creds <- function(object, ...) {
 #' @export
 set_creds <- function(con, password = NULL, keyring = NULL) {
   .check_connection(con)
+  # SMB credential storage is owned by smbclientr, not netfs - it knows
+  # nothing about how smbclient/Windows native SMB actually consumes them.
+  if (inherits(con, "netfs_smb")) return(smbclientr::set_creds(con, password = password, keyring = keyring))
   keyring <- .netfs_keyring(keyring)
   service <- .credential_service(con)
   username <- .credential_username(con)
@@ -107,6 +110,7 @@ set_creds <- function(con, password = NULL, keyring = NULL) {
 #' @export
 get_creds <- function(con, keyring = NULL) {
   .check_connection(con)
+  if (inherits(con, "netfs_smb")) return(new_netfs_creds(smbclientr::get_creds(con, keyring = keyring)))
   new_netfs_creds(
     .keyring_get(
       .credential_service(con),
@@ -120,6 +124,7 @@ get_creds <- function(con, keyring = NULL) {
 #' @export
 delete_creds <- function(con, keyring = NULL) {
   .check_connection(con)
+  if (inherits(con, "netfs_smb")) { smbclientr::delete_creds(con, keyring = keyring); return(invisible(con)) }
   .keyring_delete(
     .credential_service(con),
     .credential_username(con),
@@ -129,6 +134,7 @@ delete_creds <- function(con, keyring = NULL) {
 }
 
 .connection_password <- function(con, required = FALSE) {
+  if (inherits(con, "netfs_smb")) return(smbclientr:::.connection_password(con, required = required))
   tryCatch(
     .keyring_get(
       .credential_service(con),

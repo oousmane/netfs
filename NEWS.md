@@ -28,3 +28,12 @@
   compatible `type` factor) instead of plain character/numeric values.
 * Added the concise `set_creds()`, `get_creds()`, and `delete_creds()` keyring
   API.
+* SMB support is now provided by the `smbclientr` package (an optional,
+  `Suggests`-only dependency - installed only if you use `smb()`). `netfs`'s
+  own SMB implementation is gone; `smb()`, `set_creds()`/`get_creds()`/
+  `delete_creds()`, and every remote filesystem operation keep their exact
+  same public behavior, now as a thin adapter that translates `smbclientr`'s
+  own errors into `netfs`'s condition classes. One user-visible improvement
+  from the rebase: server-side `file_copy()` is now supported for SMB (via
+  `smbclient`'s `scopy` or native Windows copy), where it previously errored
+  with `netfs_unsupported`.

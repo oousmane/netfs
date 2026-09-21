@@ -1,32 +1,40 @@
+.require_smbclientr <- function() {
+  if (requireNamespace("smbclientr", quietly = TRUE)) return(invisible(TRUE))
+  abort_netfs_backend_unavailable(
+    "SMB connections require the smbclientr package. Install it first.",
+    command = "smbclientr"
+  )
+}
+
 #' Create an SMB connection description
 #'
-#' On Windows, operations use an existing authenticated Windows SMB session.
-#' On macOS and Linux, operations use the separately installed Samba
-#' `smbclient` utility (on macOS, install it with Homebrew via
-#' `brew install samba`; the MacPorts `samba4` port is known to crash on
-#' connect on some macOS versions).
+#' SMB support is provided by the smbclientr package: on Windows, operations
+#' use native Windows filesystem/UNC support; on macOS and Linux, operations
+#' use the separately installed Samba `smbclient` utility (on macOS, install
+#' it with Homebrew via `brew install samba`; the MacPorts `samba4` port is
+#' known to crash on connect on some macOS versions). See
+#' `smbclientr::smb_connection()` for backend details.
 #' @param host SMB server hostname.
 #' @param share Share name, separate from operation paths.
 #' @param user Optional login name.
 #' @param password Optional password. When supplied, it is written to the
 #'   selected `keyring` credential store and is not retained in the connection.
 #' @param domain Optional Windows domain.
-#' @param ... Backend options.
-#' @return A `netfs_smb` connection.
+#' @param ... Additional arguments passed to `smbclientr::smb_connection()`
+#'   (for example `send_buffer`).
+#' @return A `netfs_smb` connection. This object is also a valid smbclientr
+#'   `smb_connection` - the same fields (`host`, `share`, `user`, `domain`)
+#'   are not duplicated between the two packages.
 #' @family connection constructors
 #' @examples
+#' \dontrun{
 #' smb("fileserver", "DATA")
+#' }
 #' @export
 smb <- function(host, share, user = NULL, password = NULL, domain = NULL, ...) {
-  .check_scalar_character(host, "host")
-  .check_scalar_character(share, "share")
-  .check_optional_scalar_character(user, "user")
-  .check_optional_scalar_character(password, "password")
-  .check_optional_scalar_character(domain, "domain")
-  share <- gsub("^[\\\\/]+|[\\\\/]+$", "", share)
-  if (!nzchar(share) || grepl("[\\\\/]", share)) rlang::abort("`share` must be one SMB share name.", class = "netfs_validation_error")
-  con <- new_netfs_connection("smb", list(host = trimws(host), share = share,
-    user = user, domain = domain, options = list(...)))
-  if (!is.null(password)) set_creds(con, password)
+  .require_smbclientr()
+  con <- smbclientr::smb_connection(host = host, share = share, user = user,
+    password = password, domain = domain, ...)
+  class(con) <- c("netfs_smb", "netfs_connection", class(con))
   con
 }

@@ -11,11 +11,6 @@ test_that("remote paths have a canonical representation", {
   expect_error(netfs:::.netfs_path_normalize("/../secret"), class = "netfs_validation_error")
 })
 
-test_that("SMB paths convert to UNC without changing the share", {
-  x <- smb("fileserver", "DATA")
-  expect_equal(netfs:::.smb_to_unc(x, "/a/file.csv"), "\\\\fileserver\\DATA\\a\\file.csv")
-})
-
 test_that("directory detection dispatches locally or remotely", {
   local <- tempfile("netfs-dir-")
   dir.create(local)

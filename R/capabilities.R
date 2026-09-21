@@ -2,7 +2,6 @@
 .has_ssh <- function() .has_command("ssh")
 .has_sftp <- function() .has_command("sftp")
 .has_scp <- function() .has_command("scp")
-.has_smbclient <- function() .has_command("smbclient")
 .has_curl <- function() isTRUE(curl::curl_version()$version != "")
 
 #' Report netfs backend capabilities
@@ -17,12 +16,11 @@
 #' @export
 netfs_capabilities <- function(con = NULL) {
   if (is.null(con)) {
-    smb_engine <- if (.is_windows()) "Windows UNC" else "smbclient"
+    smb <- if (requireNamespace("smbclientr", quietly = TRUE)) smbclientr::smb_capabilities() else NULL
     return(tibble::tibble(
       backend = c("local", "ftp", "ssh", "smb"),
-      available = c(TRUE, .has_curl(), .has_ssh() && .has_scp(),
-        .is_windows() || .has_smbclient()),
-      engine = c("fs", "libcurl", "OpenSSH", smb_engine)
+      available = c(TRUE, .has_curl(), .has_ssh() && .has_scp(), isTRUE(smb$available)),
+      engine = c("fs", "libcurl", "OpenSSH", if (is.null(smb)) NA_character_ else smb$engine)
     ))
   }
   .check_connection(con)
@@ -31,7 +29,8 @@ netfs_capabilities <- function(con = NULL) {
   supported <- switch(class(con)[[1L]],
     netfs_ssh = operations != "file_copy",
     netfs_ftp = !operations %in% c("file_copy"),
-    netfs_smb = if (.smb_uses_native_fs()) rep(TRUE, length(operations)) else operations != "file_copy"
+    # scopy (smbclient) or native UNC copy: file_copy is supported either way.
+    netfs_smb = rep(TRUE, length(operations))
   )
   tibble::tibble(operation = operations, supported = supported)
 }
