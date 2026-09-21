@@ -1,5 +1,5 @@
 .smb_service <- function(con) paste0("//", con$host, "/", con$share)
-.smb_path <- function(path) gsub("/", "\\\\", sub("^/", "", .netfs_path_normalize(path)), fixed = TRUE)
+.smb_path <- function(path) gsub("/", "\\", sub("^/", "", .netfs_path_normalize(path)), fixed = TRUE)
 
 .smb_common_args <- function(con) {
   # smbclient's -g/--grepable does not change `ls`/`dir` output on macOS/Linux
