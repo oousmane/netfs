@@ -50,17 +50,49 @@
   vapply(names[nzchar(names)], function(x) .remote_path_join(path, x), character(1))
 }
 
+.ftp_metadata <- function(con, path) {
+  # nobody = TRUE (curl's HEAD-equivalent) is a lightweight FTP SIZE/MDTM
+  # query - it only succeeds for a file, never transferring file content.
+  # Without it, curl_fetch_memory() on an FTP file URL downloads the whole
+  # file just to check it exists (confirmed live: 18s for a 22MB file vs
+  # 4s with nobody = TRUE), which made file_exists()/file_info() unusably
+  # slow, or effectively hung, for large files.
+  handle <- .ftp_handle(con); curl::handle_setopt(handle, nobody = TRUE)
+  .ftp_request(con, path, "metadata", function(url, handle) curl::curl_fetch_memory(url, handle = handle), handle = handle)
+}
+
 .ftp_exists <- function(con, path, directory = FALSE) {
   tryCatch({
-    if (directory) .dir_ls.netfs_ftp(con, path) else .ftp_request(con, path, "metadata", function(url, handle) curl::curl_fetch_memory(url, handle = handle))
+    if (directory) .dir_ls.netfs_ftp(con, path) else .ftp_metadata(con, path)
     TRUE
   }, netfs_not_found = function(e) FALSE)
 }
 .file_exists.netfs_ftp <- function(con, path, ...) .ftp_exists(con, path)
 .dir_exists.netfs_ftp <- function(con, path, ...) .ftp_exists(con, path, TRUE)
+
+.ftp_parse_metadata_headers <- function(response) {
+  headers <- rawToChar(response$headers)
+  size <- if (grepl("Content-Length:", headers, fixed = TRUE)) {
+    suppressWarnings(as.numeric(sub(".*Content-Length:\\s*(\\d+).*", "\\1", headers)))
+  } else NA_real_
+  date_match <- regmatches(headers, regexpr("Last-Modified:\\s*[A-Za-z]+, [^\r\n]+", headers))
+  modification_time <- if (length(date_match)) {
+    as.POSIXct(sub("Last-Modified:\\s*[A-Za-z]+, ", "", date_match), format = "%d %b %Y %H:%M:%S", tz = "GMT")
+  } else as.POSIXct(NA)
+  list(size = size, modification_time = modification_time)
+}
+
 .file_info.netfs_ftp <- function(con, path, ...) {
-  if (!.file_exists.netfs_ftp(con, path)) abort_netfs_not_found(sprintf("Remote path `%s` was not found.", path))
-  .new_remote_info(path)
+  # A file's metadata is available cheaply (see .ftp_metadata()); a
+  # directory's is not (the same nobody = TRUE request fails outright for
+  # one, confirmed live), so directories fall back to existence only.
+  response <- tryCatch(.ftp_metadata(con, path), netfs_not_found = function(e) NULL)
+  if (!is.null(response)) {
+    meta <- .ftp_parse_metadata_headers(response)
+    return(.new_remote_info(path, "file", meta$size, meta$modification_time))
+  }
+  if (!.dir_exists.netfs_ftp(con, path)) abort_netfs_not_found(sprintf("Remote path `%s` was not found.", path))
+  .new_remote_info(path, "directory")
 }
 
 .ftp_quote <- function(con, command, path, action) {

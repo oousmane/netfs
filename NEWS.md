@@ -37,3 +37,10 @@
   from the rebase: server-side `file_copy()` is now supported for SMB (via
   `smbclient`'s `scopy` or native Windows copy), where it previously errored
   with `netfs_unsupported`.
+* Fixed `file_exists()`/`file_info()` on FTP effectively downloading a
+  file's entire contents just to check it exists (confirmed on a real
+  server: 18s for a 22MB file, versus 4s with the fix - for a very large
+  file this could take minutes or effectively hang). Uses curl's
+  `nobody = TRUE` (an FTP SIZE/MDTM query) instead of a full fetch.
+* `file_info()` now returns real `size` and `modification_time` for FTP
+  files (previously always `NA`), read from the same lightweight request.
