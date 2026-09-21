@@ -58,7 +58,12 @@
 .file_copy.netfs_ssh <- function(con, path, new_path, ...) abort_netfs_unsupported("Server-side file copy is not supported by the SSH backend.", operation = "file_copy")
 
 .file_info.netfs_ssh <- function(con, path, ...) {
-  script <- sprintf("stat -c '%%F\\t%%s\\t%%Y' -- %s", .sh_quote(path))
+  # `stat -c` is GNU-coreutils-specific (illegal option on macOS/BSD's
+  # stat, confirmed locally). Falls back to BSD's stat -f syntax, which
+  # uses different flags entirely; %HT/%z/%m give the same three fields
+  # (type/size/epoch mtime) in BSD's own format.
+  quoted <- .sh_quote(path)
+  script <- sprintf("stat -c '%%F\\t%%s\\t%%Y' -- %s 2>/dev/null || stat -f '%%HT%%t%%z%%t%%m' -- %s", quoted, quoted)
   result <- .ssh_run(con, script)
   fields <- strsplit(sub("[\r\n]+$", "", result$stdout), "\t", fixed = TRUE)[[1L]]
   if (length(fields) < 3L) abort_netfs("SSH returned unrecognized metadata.", "netfs_parse_error")
