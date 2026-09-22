@@ -4,6 +4,21 @@ test_that("SSH targets and arguments are constructed safely", {
   expect_true(all(c("2200", "key file") %in% netfs:::.ssh_common_args(x)))
 })
 
+test_that("SSH/SCP calls share one ControlMaster connection on Unix, none on Windows", {
+  con <- ssh("host", user = "alice", port = 22)
+  args <- netfs:::.ssh_common_args(con)
+  expect_true(any(grepl("^ControlMaster=auto$", args)))
+  ssh_path <- args[which(grepl("^ControlPath=", args))]
+  scp_path <- netfs:::.scp_common_args(con)[which(grepl("^ControlPath=", netfs:::.scp_common_args(con)))]
+  expect_equal(ssh_path, scp_path) # same connection, same socket, whichever tool is used
+
+  local_mocked_bindings(
+    .Platform = list(OS.type = "windows"),
+    .package = "base"
+  )
+  expect_equal(netfs:::.ssh_control_args(con), character())
+})
+
 test_that("SSH listing parsing handles spaces", {
   local_mocked_bindings(
     .ssh_run = function(con, script, ...) list(status = 0L, stdout = "/data/a b\n/data/c\n", stderr = ""),

@@ -146,7 +146,11 @@ netfs_capabilities(server)
 - `file_transfer()` supports cross-connection transfers through temporary
   local staging. It is not a direct server-to-server operation.
 - Password authentication for command-line SSH is not injected into process
-  arguments. Use an SSH agent, SSH configuration, or an identity file.
+  arguments. Use an SSH agent, SSH configuration, or an identity file. On
+  Unix, operations on the same SSH connection share one OpenSSH
+  `ControlMaster` connection rather than reconnecting per call (confirmed
+  live: roughly a 9-13x speedup for repeated operations); not available on
+  Windows.
 - Normal unit tests use mocked transports and do not require live servers.
 
 Remote failures inherit from `netfs_error`, with subclasses for authentication,

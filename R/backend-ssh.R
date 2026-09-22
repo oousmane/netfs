@@ -1,13 +1,33 @@
 .ssh_target <- function(con) if (is.null(con$user)) con$host else paste0(con$user, "@", con$host)
 
+# Each netfs SSH call previously opened a brand-new connection (full
+# handshake + auth) - dir_ls(), every file_info() call, etc. OpenSSH's
+# ControlMaster lets the first call become a persistent master connection
+# that later calls transparently multiplex through, with no separate setup
+# step required and no credential ever touching netfs. Windows OpenSSH has
+# had unreliable/absent ControlMaster support, so this only applies on
+# Unix; Windows keeps the previous one-connection-per-call behavior.
+.ssh_control_path <- function(con) {
+  key <- paste0(con$user %||% "", "@", con$host, ":", con$port)
+  # /tmp directly, not tempdir(): tempdir()'s path on macOS is long enough
+  # to risk exceeding the ~104-byte Unix domain socket path limit once a
+  # descriptive filename is appended.
+  file.path("/tmp", paste0("netfs-ssh-", substr(rlang::hash(key), 1, 16)))
+}
+
+.ssh_control_args <- function(con) {
+  if (.Platform$OS.type == "windows") return(character())
+  c("-o", "ControlMaster=auto", "-o", paste0("ControlPath=", .ssh_control_path(con)), "-o", "ControlPersist=10m")
+}
+
 .ssh_common_args <- function(con) {
-  args <- c("-p", as.character(con$port), "-o", "BatchMode=yes")
+  args <- c("-p", as.character(con$port), "-o", "BatchMode=yes", .ssh_control_args(con))
   if (!is.null(con$identity_file)) args <- c(args, "-i", con$identity_file)
   args
 }
 
 .scp_common_args <- function(con) {
-  args <- c("-P", as.character(con$port), "-o", "BatchMode=yes")
+  args <- c("-P", as.character(con$port), "-o", "BatchMode=yes", .ssh_control_args(con))
   if (!is.null(con$identity_file)) args <- c(args, "-i", con$identity_file)
   args
 }

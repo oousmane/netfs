@@ -44,3 +44,10 @@
   `nobody = TRUE` (an FTP SIZE/MDTM query) instead of a full fetch.
 * `file_info()` now returns real `size` and `modification_time` for FTP
   files (previously always `NA`), read from the same lightweight request.
+* Fixed `file_info()` over SSH breaking against macOS/BSD remotes: it used
+  `stat -c`, GNU-coreutils-specific syntax; falls back to BSD's `stat -f`
+  syntax if that fails.
+* On Unix, operations on the same SSH connection now share one OpenSSH
+  `ControlMaster` connection instead of opening a new one (full handshake
+  and authentication) per call - confirmed live: roughly a 9-13x speedup
+  for repeated operations. Not available on Windows.

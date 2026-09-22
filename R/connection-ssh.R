@@ -1,7 +1,17 @@
 #' Create an SSH connection description
 #'
-#' Authentication may use SSH configuration, an agent, an identity file, or a
-#' password-capable system setup. Construction does not contact the server.
+#' Authentication may use SSH configuration, an agent, or an identity file.
+#' OpenSSH is run with `BatchMode=yes`, so it can never prompt for or accept
+#' a password - a stored `password` (see `password` below) is not usable
+#' for authentication as a result; it is kept only for callers that manage
+#' authentication another way. Construction does not contact the server.
+#'
+#' On Unix, operations on the same connection share one OpenSSH
+#' `ControlMaster` connection instead of opening a new one (full handshake
+#' and authentication) per call - the first operation establishes it, later
+#' ones reuse it automatically. Not available on Windows (unreliable
+#' `ControlMaster` support in Windows OpenSSH), where each call still opens
+#' its own connection as before.
 #' @param host Server hostname.
 #' @param user Optional login name.
 #' @param port SSH port.
