@@ -19,6 +19,25 @@ test_that("SSH/SCP calls share one ControlMaster connection on Unix, none on Win
   expect_equal(netfs:::.ssh_control_args(con), character())
 })
 
+test_that("unrecognized SSH failures include the remote command's own output", {
+  con <- ssh("host")
+  result <- list(status = 1L, stdout = "", stderr = "mkdir: cannot create directory 'x': No space left on device")
+  expect_error(
+    netfs:::.ssh_check_result(result, con),
+    "No space left on device",
+    class = "netfs_backend_error"
+  )
+})
+
+test_that("a bare file-level 'permission denied' is not misclassified as an auth failure", {
+  con <- ssh("host")
+  file_level <- list(status = 1L, stdout = "", stderr = "mkdir: cannot create directory 'x': Permission denied")
+  expect_error(netfs:::.ssh_check_result(file_level, con), class = "netfs_permission_error")
+
+  auth_level <- list(status = 255L, stdout = "", stderr = "hpc@host: Permission denied (publickey,password).")
+  expect_error(netfs:::.ssh_check_result(auth_level, con), class = "netfs_auth_error")
+})
+
 test_that("SSH listing parsing handles spaces", {
   local_mocked_bindings(
     .ssh_run = function(con, script, ...) list(status = 0L, stdout = "/data/a b\n/data/c\n", stderr = ""),

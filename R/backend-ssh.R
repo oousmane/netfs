@@ -43,10 +43,23 @@
   if (result$status == 0L) return(result)
   detail <- paste(result$stderr, result$stdout)
   if (allow_missing && result$status == 44L) return(result)
-  if (grepl("permission denied|authentication failed", detail, ignore.case = TRUE)) abort_netfs_auth(sprintf("SSH authentication to `%s` failed.", con$host), result = result)
+  # OpenSSH's own connection-level denial names the auth methods tried,
+  # e.g. "Permission denied (publickey,password)." - that parenthetical is
+  # what distinguishes it from a bare "Permission denied" a remote command
+  # like mkdir/rm prints for a file-level permission problem after a
+  # successful login. Without requiring it, the file-level case below was
+  # dead code: any "permission denied" text always matched this branch
+  # first.
+  if (grepl("permission denied \\(|authentication failed", detail, ignore.case = TRUE)) abort_netfs_auth(sprintf("SSH authentication to `%s` failed.", con$host), result = result)
   if (grepl("timed out|no route|resolve hostname|connection refused|connection closed", detail, ignore.case = TRUE)) abort_netfs_connection(sprintf("Could not connect to SSH server `%s`.", con$host), result = result)
   if (grepl("permission denied", detail, ignore.case = TRUE)) abort_netfs_permission(sprintf("SSH operation on `%s` was denied.", con$host), result = result)
-  abort_netfs(sprintf("SSH operation on `%s` failed.", con$host), "netfs_backend_error", result = result)
+  detail <- trimws(detail)
+  message <- if (nzchar(detail)) {
+    sprintf("SSH operation on `%s` failed: %s", con$host, detail)
+  } else {
+    sprintf("SSH operation on `%s` failed.", con$host)
+  }
+  abort_netfs(message, "netfs_backend_error", result = result)
 }
 
 .ssh_test <- function(con, path, flag) {
