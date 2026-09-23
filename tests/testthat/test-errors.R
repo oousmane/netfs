@@ -4,7 +4,8 @@ test_that("condition constructors have stable classes", {
 })
 
 test_that("unsupported remote copies fail explicitly", {
-  expect_error(file_copy("/a", "/b", con = ssh("host")), class = "netfs_unsupported")
+  # FTP has no copy command in the base protocol; SSH has its own shell (cp)
+  # and is no longer in this category.
   expect_error(file_copy("/a", "/b", con = ftp("host")), class = "netfs_unsupported")
 })
 

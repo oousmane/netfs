@@ -52,15 +52,18 @@ new_netfs_creds <- function(value) {
 #' @return `print()` returns `x` invisibly, `format()` returns the hidden
 #'   marker, and `str()` returns `NULL` invisibly.
 #' @keywords internal
+#' @export
 print.netfs_creds <- function(x, ...) {
   cat("<netfs_creds>\n<hidden>\n")
   invisible(x)
 }
 
 #' @rdname print.netfs_creds
+#' @export
 format.netfs_creds <- function(x, ...) "<hidden>"
 
 #' @rdname print.netfs_creds
+#' @export
 str.netfs_creds <- function(object, ...) {
   cat("netfs_creds <hidden>\n")
   invisible(NULL)

@@ -19,7 +19,7 @@
 }
 \value{
 \code{print()} returns \code{x} invisibly, \code{format()} returns the hidden
-marker \code{<hidden>}, and \code{str()} returns \code{NULL} invisibly.
+marker, and \code{str()} returns \code{NULL} invisibly.
 }
 \description{
 Hidden credential display

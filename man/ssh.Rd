@@ -13,10 +13,9 @@ ssh(host, user = NULL, port = 22, password = NULL, identity_file = NULL, ...)
 
 \item{port}{SSH port.}
 
-\item{password}{Optional password to store in \code{keyring}. OpenSSH is run
-with \code{BatchMode=yes}, so a stored password is not usable for
-authentication; prefer an SSH agent, SSH configuration, or
-\code{identity_file}.}
+\item{password}{Optional password to store in \code{keyring}. OpenSSH
+command-line operations do not place this value on the command line;
+prefer an SSH agent, SSH configuration, or \code{identity_file}.}
 
 \item{identity_file}{Optional private-key path.}
 
@@ -44,9 +43,10 @@ its own connection as before.
 ssh("server.example.org", user = "user")
 }
 \seealso{
-Other connection constructors:
-\code{\link[=ftp]{ftp()}},
-\code{\link[=set_creds]{set_creds()}},
-\code{\link[=smb]{smb()}}
+Other connection constructors: 
+\code{\link{ftp}()},
+\code{\link{set_creds}()},
+\code{\link{smb}()},
+\code{\link{ssh_keygen}()}
 }
 \concept{connection constructors}

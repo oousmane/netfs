@@ -13,3 +13,13 @@ abort_netfs_unsupported <- function(message, ...) abort_netfs(message, "netfs_un
   for (secret in redact[nzchar(redact)]) x <- gsub(secret, "<redacted>", x, fixed = TRUE)
   x
 }
+
+.netfs_backend_name <- function(con) {
+  switch(class(con)[[1L]], netfs_ssh = "SSH", netfs_ftp = "FTP", netfs_smb = "SMB", class(con)[[1L]])
+}
+
+.abort_netfs_op_unsupported <- function(con, operation, detail = NULL) {
+  message <- sprintf("%s() is not supported by the %s backend.", operation, .netfs_backend_name(con))
+  if (!is.null(detail)) message <- paste0(message, " ", detail)
+  abort_netfs_unsupported(message, operation = operation)
+}

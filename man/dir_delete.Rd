@@ -4,33 +4,58 @@
 \alias{dir_delete}
 \title{Delete a directory}
 \usage{
-dir_delete(path, con = NULL, ...)
+dir_delete(path, con = NULL, recurse = FALSE, ...)
 }
 \arguments{
-\item{path}{A local or remote path.}
+\item{path}{A local or remote path. For \code{dir_ls()}, a connection supplied as
+the first argument is shorthand for listing that connection's root.}
 
 \item{con}{\code{NULL} for local \code{fs} behavior, or a netfs connection.}
+
+\item{recurse}{Delete the directory's contents first if it isn't empty.
+Default \code{FALSE} matches a plain \code{rmdir}: deletion fails if the
+directory has anything in it, unlike local \code{\link[fs:delete]{fs::dir_delete()}}, which
+is always recursive. SMB deletes recursively either way (its native
+delete already works this way), so \code{recurse = TRUE} costs some
+redundant round trips there but is harmless.}
 
 \item{...}{Arguments passed to \code{fs::dir_ls()} locally or to the backend.}
 }
 \value{
-The path, invisibly, as an \code{fs_path}. Remote deletion does not
-recursively delete contents.
+The path, invisibly, as an \code{fs_path}.
 }
 \description{
 Delete a directory
 }
 \seealso{
-Other filesystem operations:
-\code{\link[=dir_create]{dir_create()}},
-\code{\link[=dir_exists]{dir_exists()}},
-\code{\link[=dir_ls]{dir_ls()}},
-\code{\link[=file_copy]{file_copy()}},
-\code{\link[=file_delete]{file_delete()}},
-\code{\link[=file_download]{file_download()}},
-\code{\link[=file_exists]{file_exists()}},
-\code{\link[=file_info]{file_info()}},
-\code{\link[=file_move]{file_move()}},
-\code{\link[=file_upload]{file_upload()}}
+Other filesystem operations: 
+\code{\link{dir_copy}()},
+\code{\link{dir_create}()},
+\code{\link{dir_exists}()},
+\code{\link{dir_info}()},
+\code{\link{dir_ls}()},
+\code{\link{dir_map}()},
+\code{\link{dir_tree}()},
+\code{\link{dir_walk}()},
+\code{\link{file_access}()},
+\code{\link{file_chmod}()},
+\code{\link{file_chown}()},
+\code{\link{file_copy}()},
+\code{\link{file_create}()},
+\code{\link{file_delete}()},
+\code{\link{file_download}()},
+\code{\link{file_exists}()},
+\code{\link{file_info}()},
+\code{\link{file_move}()},
+\code{\link{file_show}()},
+\code{\link{file_touch}()},
+\code{\link{file_transfer}()},
+\code{\link{file_upload}()},
+\code{\link{is_dir_empty}()},
+\code{\link{is_file}()},
+\code{\link{link_copy}()},
+\code{\link{link_create}()},
+\code{\link{link_delete}()},
+\code{\link{link_path}()}
 }
 \concept{filesystem operations}

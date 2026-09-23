@@ -16,7 +16,7 @@ delete_creds(con, keyring = NULL)
 \item{con}{A connection created by \code{\link[=ftp]{ftp()}}, \code{\link[=ssh]{ssh()}}, or \code{\link[=smb]{smb()}}.}
 
 \item{password}{Optional password. When \code{NULL},
-\code{\link[keyring:key_set]{keyring::key_set()}} requests it interactively without echoing it.}
+\code{\link[keyring:key_get]{keyring::key_set()}} requests it interactively without echoing it.}
 
 \item{keyring}{Optional keyring name. By default, uses \code{NETFS_KEYRING} and
 then the system default keyring.}
@@ -38,5 +38,12 @@ set_creds(con)
 get_creds(con)
 delete_creds(con)
 }
+}
+\seealso{
+Other connection constructors: 
+\code{\link{ftp}()},
+\code{\link{smb}()},
+\code{\link{ssh}()},
+\code{\link{ssh_keygen}()}
 }
 \concept{connection constructors}

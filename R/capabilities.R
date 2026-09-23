@@ -24,13 +24,24 @@ netfs_capabilities <- function(con = NULL) {
     ))
   }
   .check_connection(con)
-  operations <- c("dir_ls", "dir_exists", "dir_create", "dir_delete", "file_exists",
-    "file_delete", "file_copy", "file_move", "file_info", "file_download", "file_upload")
+  operations <- c("dir_ls", "dir_info", "dir_exists", "dir_create", "dir_delete", "dir_copy",
+    "file_exists", "file_delete", "file_copy", "file_move", "file_info", "file_download",
+    "file_upload", "file_create", "file_chmod", "file_chown", "file_touch",
+    "file_access (read/write/execute)", "link_create", "link_path", "link_copy", "link_delete")
+  # file_copy has no equivalent in the base FTP protocol (no RFC959 "copy"
+  # command), so it's unsupported there; SSH uses `cp` on the remote shell,
+  # and SMB uses smbclientr's scopy/native UNC copy. dir_copy() works on
+  # every backend regardless (including FTP): each file falls back to a
+  # local-staging download+upload when the backend has no native copy.
+  # Every POSIX-permission/ownership/timestamp/symlink operation is
+  # SSH-only, since it's the only backend routed through a real remote
+  # shell - FTP and SMB have no consistent equivalent.
+  ssh_only <- c("file_chmod", "file_chown", "file_touch", "file_access (read/write/execute)",
+    "link_create", "link_path", "link_copy", "link_delete")
   supported <- switch(class(con)[[1L]],
-    netfs_ssh = operations != "file_copy",
-    netfs_ftp = !operations %in% c("file_copy"),
-    # scopy (smbclient) or native UNC copy: file_copy is supported either way.
-    netfs_smb = rep(TRUE, length(operations))
+    netfs_ssh = rep(TRUE, length(operations)),
+    netfs_ftp = !operations %in% c("file_copy", ssh_only),
+    netfs_smb = !operations %in% ssh_only
   )
   tibble::tibble(operation = operations, supported = supported)
 }

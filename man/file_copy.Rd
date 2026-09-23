@@ -7,7 +7,8 @@
 file_copy(path, new_path, con = NULL, ...)
 }
 \arguments{
-\item{path}{A local or remote path.}
+\item{path}{A local or remote path. For \code{dir_ls()}, a connection supplied as
+the first argument is shorthand for listing that connection's root.}
 
 \item{new_path}{Destination on the same filesystem and connection as \code{path}.}
 
@@ -22,16 +23,34 @@ The destination path, invisibly, as an \code{fs_path}.
 Copy a file within one filesystem
 }
 \seealso{
-Other filesystem operations:
-\code{\link[=dir_create]{dir_create()}},
-\code{\link[=dir_delete]{dir_delete()}},
-\code{\link[=dir_exists]{dir_exists()}},
-\code{\link[=dir_ls]{dir_ls()}},
-\code{\link[=file_delete]{file_delete()}},
-\code{\link[=file_download]{file_download()}},
-\code{\link[=file_exists]{file_exists()}},
-\code{\link[=file_info]{file_info()}},
-\code{\link[=file_move]{file_move()}},
-\code{\link[=file_upload]{file_upload()}}
+Other filesystem operations: 
+\code{\link{dir_copy}()},
+\code{\link{dir_create}()},
+\code{\link{dir_delete}()},
+\code{\link{dir_exists}()},
+\code{\link{dir_info}()},
+\code{\link{dir_ls}()},
+\code{\link{dir_map}()},
+\code{\link{dir_tree}()},
+\code{\link{dir_walk}()},
+\code{\link{file_access}()},
+\code{\link{file_chmod}()},
+\code{\link{file_chown}()},
+\code{\link{file_create}()},
+\code{\link{file_delete}()},
+\code{\link{file_download}()},
+\code{\link{file_exists}()},
+\code{\link{file_info}()},
+\code{\link{file_move}()},
+\code{\link{file_show}()},
+\code{\link{file_touch}()},
+\code{\link{file_transfer}()},
+\code{\link{file_upload}()},
+\code{\link{is_dir_empty}()},
+\code{\link{is_file}()},
+\code{\link{link_copy}()},
+\code{\link{link_create}()},
+\code{\link{link_delete}()},
+\code{\link{link_path}()}
 }
 \concept{filesystem operations}

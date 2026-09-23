@@ -30,9 +30,10 @@ Construction validates settings but does not contact the server.
 ftp("ftp.example.org")
 }
 \seealso{
-Other connection constructors:
-\code{\link[=set_creds]{set_creds()}},
-\code{\link[=smb]{smb()}},
-\code{\link[=ssh]{ssh()}}
+Other connection constructors: 
+\code{\link{set_creds}()},
+\code{\link{smb}()},
+\code{\link{ssh}()},
+\code{\link{ssh_keygen}()}
 }
 \concept{connection constructors}

@@ -51,3 +51,68 @@
   `ControlMaster` connection instead of opening a new one (full handshake
   and authentication) per call - confirmed live: roughly a 9-13x speedup
   for repeated operations. Not available on Windows.
+* Added `ssh_keygen()`, a utility to generate an ed25519 identity file for
+  an SSH connection and print the `ssh-copy-id` command that registers it
+  on the server. It never contacts the server itself.
+* Fixed `file_upload()`/`file_download()` against remotes where a modern
+  OpenSSH client's default SFTP transfer is served by a process that
+  doesn't share the login shell's view of the filesystem (confirmed live
+  against Windows OpenSSH with a Git Bash default shell: `test -d`/`find`
+  saw a path that the native `sftp-server` reported as missing). `scp` is
+  now forced onto the legacy, shell-routed protocol (`-O`) for consistency
+  with every other SSH operation.
+* Fixed `file_upload()`/`file_download()` mangling remote paths containing
+  spaces or other shell-metacharacters, and fixed downloads of such a path
+  failing outright with `protocol error: filename does not match request`.
+  `scp`'s remote target is never parsed by a shell locally, and does no
+  escaping of its own - it must arrive backslash-escaped for the remote
+  shell, not `netfs`'s ordinary single-quote-style shell quoting (which,
+  for downloads, broke `scp`'s own check that the server's reported
+  filename matches what was requested).
+* Fixed `file_info()` over SSH failing with "SSH returned unrecognized
+  metadata" against a Windows/MSYS2-packaged GNU coreutils `stat`
+  (confirmed live over Git Bash): it printed the format string's `\t`
+  escape sequence verbatim instead of converting it to a tab the way
+  Linux's `stat` does, so netfs's parser never found a field separator.
+  The format string now embeds a literal tab byte instead, which every
+  `stat` tested passes through unchanged without needing to interpret it.
+* Added the rest of `fs`'s API for remote connections, backed entirely by
+  the existing `dir_ls()`/`file_info()`/`file_exists()`/`dir_exists()`/
+  `file_copy()` primitives so it works on every backend those already
+  support: `dir_info()`, `dir_map()`, `dir_walk()`, `dir_tree()`,
+  `dir_copy()`, `file_size()`, `file_create()`, `is_file()`, `is_dir()`,
+  `is_link()`, `is_file_empty()`, `is_dir_empty()`. `dir_ls()`/`dir_info()`
+  also gained a `recurse` argument.
+* Added `file_chmod()`, `file_chown()`, `file_touch()`, `file_access()`
+  (`"read"`/`"write"`/`"execute"` modes), `link_create()`, `link_path()`,
+  `link_copy()`, and `link_delete()`. POSIX permissions, ownership,
+  arbitrary timestamps, and symlinks have no consistent equivalent across
+  FTP or SMB, so these are SSH-only (routed through the remote shell via
+  `chmod`/`chown`/`touch`/`test -r|-w|-x`/`ln -s`/`readlink`); calling one
+  on an FTP or SMB connection fails immediately with a clear
+  `netfs_unsupported` error naming the operation and backend, rather than
+  silently no-op'ing or leaking a generic error. `file_touch()` with an
+  explicit (non-"now") timestamp additionally requires a GNU `touch` on
+  the remote - BSD/macOS's `-t` flag uses the server's local time, which
+  this project has had no reachable BSD SSH target to verify a correct
+  conversion against.
+* Added `file_show()`, which is refused for any remote connection - it
+  opens a path in a local viewer, and a remote path isn't on this machine.
+* Fixed `file_info()` over SSH never recognizing a symlink: GNU/BSD `stat`
+  both describe one as some form of "symbolic link", which matched neither
+  the "directory" nor "file" branch, so its type silently came back `NA`.
+* Fixed a missing remote path over SSH (e.g. `file_info()` on one) raising
+  a generic `netfs_backend_error` instead of `netfs_not_found`, unlike
+  every other backend - every coreutils tool tested reports a missing
+  target with the same "No such file or directory" phrase.
+* `file_copy()` is now supported over SSH, using `cp` on the remote shell
+  - the same connection every other SSH operation already runs through.
+  It had been marked unsupported outright, the same as FTP (which
+  genuinely has no copy command in the base protocol at all); SSH never
+  needed the local download/upload round-trip that would imply, since a
+  same-server copy never has to leave the server.
+* `dir_copy()` no longer fails partway through (leaving an incomplete
+  destination directory behind) on a backend without a native
+  `file_copy()` - currently just FTP. Each such file instead falls back to
+  a local-staging download+upload, so the copy still completes.
+* `netfs_capabilities(con)` now reports support for every operation above.

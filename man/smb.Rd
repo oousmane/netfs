@@ -18,25 +18,32 @@ selected \code{keyring} credential store and is not retained in the connection.}
 
 \item{domain}{Optional Windows domain.}
 
-\item{...}{Backend options.}
+\item{...}{Additional arguments passed to \code{smbclientr::smb_connection()}
+(for example \code{send_buffer}).}
 }
 \value{
-A \code{netfs_smb} connection.
+A \code{netfs_smb} connection. This object is also a valid smbclientr
+\code{smb_connection} - the same fields (\code{host}, \code{share}, \code{user}, \code{domain})
+are not duplicated between the two packages.
 }
 \description{
-On Windows, operations use an existing authenticated Windows SMB session.
-On macOS and Linux, operations use the separately installed Samba
-\code{smbclient} utility (on macOS, install it with Homebrew via
-\code{brew install samba}; the MacPorts \code{samba4} port is known to crash
-on connect on some macOS versions).
+SMB support is provided by the smbclientr package: on Windows, operations
+use native Windows filesystem/UNC support; on macOS and Linux, operations
+use the separately installed Samba \code{smbclient} utility (on macOS, install
+it with Homebrew via \verb{brew install samba}; the MacPorts \code{samba4} port is
+known to crash on connect on some macOS versions). See
+\code{smbclientr::smb_connection()} for backend details.
 }
 \examples{
+\dontrun{
 smb("fileserver", "DATA")
 }
+}
 \seealso{
-Other connection constructors:
-\code{\link[=ftp]{ftp()}},
-\code{\link[=set_creds]{set_creds()}},
-\code{\link[=ssh]{ssh()}}
+Other connection constructors: 
+\code{\link{ftp}()},
+\code{\link{set_creds}()},
+\code{\link{ssh}()},
+\code{\link{ssh_keygen}()}
 }
 \concept{connection constructors}

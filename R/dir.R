@@ -10,6 +10,9 @@
 #'   SSH via the default fallback); SMB determines it from the listing at no
 #'   extra cost. An entry whose type can't be determined (`NA`) never
 #'   matches a specific type.
+#' @param recurse For remote connections, recurse fully into subdirectories?
+#'   Costs one extra round trip per subdirectory found (each is listed in
+#'   turn), same as `type` filtering.
 #' @param ... Arguments passed to `fs::dir_ls()` locally or to the backend.
 #' @return An `fs_path` vector. Remote paths use forward slashes.
 #' @family filesystem operations
@@ -17,7 +20,7 @@
 #' @examples
 #' dir_ls(tempdir())
 #' @export
-dir_ls <- function(path = ".", con = NULL, type = "any", ...) {
+dir_ls <- function(path = ".", con = NULL, type = "any", recurse = FALSE, ...) {
   if (is_netfs_connection(path)) {
     if (!is.null(con)) {
       rlang::abort(
@@ -28,12 +31,12 @@ dir_ls <- function(path = ".", con = NULL, type = "any", ...) {
     con <- path
     path <- "/"
   }
-  if (is.null(con)) return(fs::dir_ls(path = path, type = type, ...))
+  if (is.null(con)) return(fs::dir_ls(path = path, type = type, recurse = recurse, ...))
   .check_connection(con)
   path <- .netfs_path_normalize(path)
-  if (identical(type, "any")) return(fs::as_fs_path(unname(.dir_ls(con, path, ...))))
-  info <- .dir_info(con, path, ...)
-  fs::as_fs_path(unname(as.character(info$path[as.character(info$type) %in% type])))
+  if (!isTRUE(recurse) && identical(type, "any")) return(fs::as_fs_path(unname(.dir_ls(con, path, ...))))
+  info <- .remote_walk(con, path, type = type, recurse = recurse)
+  fs::as_fs_path(unname(as.character(info$path)))
 }
 
 #' Test whether directories exist
@@ -60,12 +63,31 @@ dir_create <- function(path, con = NULL, ...) {
 
 #' Delete a directory
 #' @inheritParams dir_ls
-#' @return The path, invisibly, as an `fs_path`. Remote deletion does not
-#'   recursively delete contents.
+#' @param recurse Delete the directory's contents first if it isn't empty.
+#'   Default `FALSE` matches a plain `rmdir`: deletion fails if the
+#'   directory has anything in it, unlike local [fs::dir_delete()], which
+#'   is always recursive. SMB deletes recursively either way (its native
+#'   delete already works this way), so `recurse = TRUE` costs some
+#'   redundant round trips there but is harmless.
+#' @return The path, invisibly, as an `fs_path`.
 #' @family filesystem operations
 #' @export
-dir_delete <- function(path, con = NULL, ...) {
+dir_delete <- function(path, con = NULL, recurse = FALSE, ...) {
   if (is.null(con)) return(fs::dir_delete(path, ...))
-  .check_connection(con)
-  invisible(fs::as_fs_path(.dir_delete(con, .netfs_path_normalize(path), ...)))
+  .check_connection(con); .check_scalar_logical(recurse, "recurse")
+  path <- .netfs_path_normalize(path)
+  if (isTRUE(recurse)) {
+    entries <- .remote_walk(con, path, type = "any", recurse = TRUE)
+    if (nrow(entries)) {
+      paths <- as.character(entries$path)
+      # Deepest entries first, so a directory is always empty by the time
+      # its own turn comes - both a file and a subdirectory a level deeper
+      # than their parent qualify equally here, only depth matters.
+      depth <- lengths(strsplit(paths, "/", fixed = TRUE))
+      for (i in order(-depth)) {
+        if (identical(as.character(entries$type[[i]]), "directory")) .dir_delete(con, paths[[i]]) else .file_delete(con, paths[[i]])
+      }
+    }
+  }
+  invisible(fs::as_fs_path(.dir_delete(con, path, ...)))
 }

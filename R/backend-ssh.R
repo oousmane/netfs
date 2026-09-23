@@ -27,12 +27,35 @@
 }
 
 .scp_common_args <- function(con) {
-  args <- c("-P", as.character(con$port), "-o", "BatchMode=yes", .ssh_control_args(con))
+  # -O: force the legacy SCP wire protocol, which every OpenSSH server has
+  # supported for decades by simply invoking `scp -t/-f` through the login
+  # shell. Since OpenSSH 9.0 (2022), the client defaults to SFTP instead,
+  # which on Windows OpenSSH is served by a separate, native sftp-server
+  # process that knows nothing about a Git-Bash/MSYS2 remote shell's `/c/`
+  # path translation - `test -d`/`find`/etc. (run through that shell) and
+  # an SFTP-protocol scp then disagree about whether a path exists at all.
+  # -O keeps file transfers on the same shell-routed path resolution as
+  # every other SSH operation.
+  args <- c("-O", "-P", as.character(con$port), "-o", "BatchMode=yes", .ssh_control_args(con))
   if (!is.null(con$identity_file)) args <- c(args, "-i", con$identity_file)
   args
 }
 
 .sh_quote <- function(x) paste0("'", gsub("'", "'\\\"'\\\"'", x, fixed = TRUE), "'")
+
+# scp's `user@host:path` target argument is never parsed by a shell locally
+# (it's a single argv string) and scp does no escaping of its own when it
+# embeds `path` into the `scp -t/-f <path>` command it sends over the SSH
+# channel - so it must arrive already escaped for the remote shell, and it
+# must NOT be wrapped like .sh_quote() does: for downloads, scp's own
+# client-side check that the server's reported filename matches what was
+# requested (hardening against a server sending back a different file)
+# derives the "requested" name from this same raw argv string using
+# backslash-aware parsing, not full shell-quote parsing - literal quote
+# characters would end up part of the "expected" name and never match.
+# Confirmed live against a Windows OpenSSH/Git-Bash remote (upload and
+# download, including a path with spaces and parens).
+.scp_path_escape <- function(x) gsub("([][ !\"$&'()*;<>?`|\\\\])", "\\\\\\1", x, perl = TRUE)
 
 .ssh_run <- function(con, script, timeout = NULL, allow_missing = FALSE) {
   result <- .run_command("ssh", c(.ssh_common_args(con), .ssh_target(con), script), timeout = timeout)
@@ -53,6 +76,12 @@
   if (grepl("permission denied \\(|authentication failed", detail, ignore.case = TRUE)) abort_netfs_auth(sprintf("SSH authentication to `%s` failed.", con$host), result = result)
   if (grepl("timed out|no route|resolve hostname|connection refused|connection closed", detail, ignore.case = TRUE)) abort_netfs_connection(sprintf("Could not connect to SSH server `%s`.", con$host), result = result)
   if (grepl("permission denied", detail, ignore.case = TRUE)) abort_netfs_permission(sprintf("SSH operation on `%s` was denied.", con$host), result = result)
+  # Every coreutils tool tested (stat, rm, mv, chmod, chown, readlink, ...)
+  # reports a missing target with this same phrase. Without this, file_info()
+  # and friends surfaced a missing remote path as a generic
+  # netfs_backend_error instead of netfs_not_found, unlike every other
+  # backend.
+  if (grepl("no such file or directory", detail, ignore.case = TRUE)) abort_netfs_not_found(sprintf("Remote path was not found on `%s`.", con$host), result = result)
   detail <- trimws(detail)
   message <- if (nzchar(detail)) {
     sprintf("SSH operation on `%s` failed: %s", con$host, detail)
@@ -88,19 +117,37 @@
   .ssh_run(con, sprintf("mv -- %s %s", .sh_quote(path), .sh_quote(new_path)))
   invisible(new_path)
 }
-.file_copy.netfs_ssh <- function(con, path, new_path, ...) abort_netfs_unsupported("Server-side file copy is not supported by the SSH backend.", operation = "file_copy")
+.file_copy.netfs_ssh <- function(con, path, new_path, ...) {
+  .ssh_run(con, sprintf("cp -- %s %s", .sh_quote(path), .sh_quote(new_path)))
+  invisible(new_path)
+}
 
 .file_info.netfs_ssh <- function(con, path, ...) {
   # `stat -c` is GNU-coreutils-specific (illegal option on macOS/BSD's
   # stat, confirmed locally). Falls back to BSD's stat -f syntax, which
   # uses different flags entirely; %HT/%z/%m give the same three fields
   # (type/size/epoch mtime) in BSD's own format.
+  #
+  # The GNU branch's format string uses a literal tab byte between fields
+  # (R's `\t`), not the two-character `\t` escape sequence - GNU stat's
+  # format-string engine is documented to convert that escape to a real
+  # tab, but a Windows/MSYS2-packaged GNU coreutils stat (confirmed live)
+  # doesn't, and prints it verbatim instead, breaking the split below. A
+  # literal tab byte needs no such interpretation from `stat` at all: any
+  # character not part of a `%` sequence is passed through unchanged on
+  # every `stat` implementation tested.
   quoted <- .sh_quote(path)
-  script <- sprintf("stat -c '%%F\\t%%s\\t%%Y' -- %s 2>/dev/null || stat -f '%%HT%%t%%z%%t%%m' -- %s", quoted, quoted)
+  script <- sprintf("stat -c '%%F\t%%s\t%%Y' -- %s 2>/dev/null || stat -f '%%HT%%t%%z%%t%%m' -- %s", quoted, quoted)
   result <- .ssh_run(con, script)
   fields <- strsplit(sub("[\r\n]+$", "", result$stdout), "\t", fixed = TRUE)[[1L]]
   if (length(fields) < 3L) abort_netfs("SSH returned unrecognized metadata.", "netfs_parse_error")
-  type <- if (grepl("directory", fields[[1L]], ignore.case = TRUE)) "directory" else if (grepl("file", fields[[1L]], ignore.case = TRUE)) "file" else fields[[1L]]
+  # GNU's %F and BSD's %HT both describe a symlink as "(S|s)ymbolic (L|l)ink"
+  # - checked before "file"/"directory" only for clarity; neither of those
+  # substrings actually appears in that phrase on either platform.
+  type <- if (grepl("directory", fields[[1L]], ignore.case = TRUE)) "directory"
+    else if (grepl("link", fields[[1L]], ignore.case = TRUE)) "symlink"
+    else if (grepl("file", fields[[1L]], ignore.case = TRUE)) "file"
+    else fields[[1L]]
   .new_remote_info(path, type, suppressWarnings(as.numeric(fields[[2L]])),
     as.POSIXct(suppressWarnings(as.numeric(fields[[3L]])), origin = "1970-01-01", tz = "UTC"))
 }
@@ -108,7 +155,7 @@
 .file_download.netfs_ssh <- function(con, path, local, ...) {
   tmp <- tempfile("netfs-download-", tmpdir = dirname(fs::path_abs(local)))
   on.exit(if (fs::file_exists(tmp)) fs::file_delete(tmp), add = TRUE)
-  remote <- paste0(.ssh_target(con), ":", .sh_quote(path))
+  remote <- paste0(.ssh_target(con), ":", .scp_path_escape(path))
   result <- .run_command("scp", c(.scp_common_args(con), remote, tmp))
   .ssh_check_result(result, con)
   if (fs::file_exists(local)) fs::file_delete(local)
@@ -117,8 +164,70 @@
 }
 
 .file_upload.netfs_ssh <- function(con, local, path, ...) {
-  remote <- paste0(.ssh_target(con), ":", .sh_quote(path))
+  remote <- paste0(.ssh_target(con), ":", .scp_path_escape(path))
   result <- .run_command("scp", c(.scp_common_args(con), local, remote))
   .ssh_check_result(result, con)
   invisible(path)
 }
+
+.file_chmod.netfs_ssh <- function(con, path, mode, ...) {
+  octal <- sprintf("%o", unclass(fs::as_fs_perms(mode)))
+  .ssh_run(con, sprintf("chmod %s -- %s", octal, .sh_quote(path)))
+  invisible(path)
+}
+
+.file_chown.netfs_ssh <- function(con, path, user_id = NULL, group_id = NULL, ...) {
+  if (is.null(user_id) && is.null(group_id)) {
+    rlang::abort("At least one of `user_id` or `group_id` must be supplied.", class = "netfs_validation_error")
+  }
+  spec <- paste0(user_id %||% "", if (!is.null(group_id)) paste0(":", group_id) else "")
+  .ssh_run(con, sprintf("chown %s -- %s", spec, .sh_quote(path)))
+  invisible(path)
+}
+
+.file_touch.netfs_ssh <- function(con, path, access_time = Sys.time(), modification_time = access_time, ...) {
+  quoted <- .sh_quote(path)
+  now <- Sys.time()
+  is_now <- function(t) isTRUE(abs(as.numeric(t) - as.numeric(now)) < 5)
+  if (is_now(access_time) && is_now(modification_time)) {
+    # A plain `touch` (both times default to "now") needs no date syntax at
+    # all - portable across every `touch` implementation, GNU or BSD.
+    .ssh_run(con, sprintf("touch -- %s", quoted))
+  } else {
+    # GNU-only: `-d` accepts an ISO 8601 timestamp directly, confirmed live
+    # against a GNU coreutils remote. BSD/macOS touch has no `-d` at all -
+    # it uses `-t [[CC]YY]MMDDhhmm[.SS]` in the *server's local time*, which
+    # this session had no reachable BSD/macOS SSH target to verify a
+    # correct UTC conversion against; a wrong guess there would silently
+    # set the wrong timestamp, which is worse than failing outright, so
+    # arbitrary timestamps are left GNU-only rather than guessed at.
+    a <- format(access_time, "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+    m <- format(modification_time, "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+    .ssh_run(con, sprintf("touch -a -d %s -m -d %s -- %s", .sh_quote(a), .sh_quote(m), quoted))
+  }
+  invisible(path)
+}
+
+.file_access.netfs_ssh <- function(con, path, mode, ...) {
+  flags <- c(read = "-r", write = "-w", execute = "-x")
+  unknown <- setdiff(mode, names(flags))
+  if (length(unknown)) {
+    rlang::abort(sprintf("Unknown file_access() mode(s): %s", paste(unknown, collapse = ", ")), class = "netfs_validation_error")
+  }
+  script <- paste(sprintf("test %s -- %s", flags[mode], .sh_quote(path)), collapse = " && ")
+  result <- .ssh_run(con, sprintf("%s && exit 0 || exit 44", script), allow_missing = TRUE)
+  result$status == 0L
+}
+
+.link_create.netfs_ssh <- function(con, path, new_path, symbolic = TRUE, ...) {
+  command <- if (isTRUE(symbolic)) "ln -s" else "ln"
+  .ssh_run(con, sprintf("%s -- %s %s", command, .sh_quote(path), .sh_quote(new_path)))
+  invisible(new_path)
+}
+
+.link_path.netfs_ssh <- function(con, path, ...) {
+  result <- .ssh_run(con, sprintf("readlink -- %s", .sh_quote(path)))
+  fs::as_fs_path(trimws(result$stdout))
+}
+
+.link_delete.netfs_ssh <- function(con, path, ...) .file_delete.netfs_ssh(con, path)
