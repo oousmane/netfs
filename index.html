@@ -206,6 +206,7 @@
 <li>SSH authentication never places a password on the command line; use an agent, SSH configuration, or an identity file. Operations on one connection share a single OpenSSH <code>ControlMaster</code> session on Unix, so repeated calls reuse the handshake instead of reconnecting each time (not available on Windows).</li>
 <li>
 <code><a href="reference/file_touch.html">file_touch()</a></code> with an explicit timestamp requires GNU <code>touch</code> on the remote; BSD/macOS SSH servers aren’t currently supported for that case.</li>
+<li>SMB on Windows (native UNC access, via <code>smbclientr</code>) has run successfully against a live server on one Windows machine, but is still very experimental - broader testing is ongoing. Linux and macOS, going through Samba’s <code>smbclient</code>, are better exercised.</li>
 <li>Unit tests run against mocked transports and don’t require a live server.</li>
 </ul>
 <p>Remote errors inherit from <code>netfs_error</code>, with subclasses for authentication, missing paths, permissions, timeouts, unavailable backends, and unsupported operations.</p>

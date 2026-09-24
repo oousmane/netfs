@@ -83,7 +83,7 @@ Other filesystem operations:
 
 ``` r
 dir_ls(tempdir())
-#> /tmp/Rtmp2L7q9K/bslib-e9b2b13fa612f50d23e4850d93d60d01
-#> /tmp/Rtmp2L7q9K/downlit
-#> /tmp/Rtmp2L7q9K/file1ac01facc792
+#> /tmp/Rtmp0UId5D/bslib-e9b2b13fa612f50d23e4850d93d60d01
+#> /tmp/Rtmp0UId5D/downlit
+#> /tmp/Rtmp0UId5D/file19e96a845871
 ```

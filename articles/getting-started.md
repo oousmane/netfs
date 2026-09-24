@@ -14,15 +14,15 @@ With no connection, netfs delegates directly to `fs`.
 dir_ls(tempdir())
 ```
 
-    ## /tmp/RtmpTTKK9Q/file1d345c826884
-    ## /tmp/RtmpTTKK9Q/rmarkdown-str1d34100c1e85.html
+    ## /tmp/RtmpLOwPhh/file1c5e995fb5d
+    ## /tmp/RtmpLOwPhh/rmarkdown-str1c5e78102fea.html
 
 ``` r
 
 file_exists(tempdir())
 ```
 
-    ## /tmp/RtmpTTKK9Q 
+    ## /tmp/RtmpLOwPhh 
     ##            TRUE
 
 ## Connection objects
