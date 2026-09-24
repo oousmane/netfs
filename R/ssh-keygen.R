@@ -2,11 +2,9 @@
 #'
 #' Creates a new ed25519 keypair under `~/.ssh` (reusing one already at the
 #' target `path` unless `overwrite = TRUE`) and prints the `ssh-copy-id`
-#' command that registers the public key on the server. netfs never contacts
-#' the server itself here: registering a key needs your existing password or
-#' access once, and SSH's own `BatchMode=yes` policy (see [ssh()]) means
-#' netfs can never supply one interactively - `ssh-copy-id` is the standard
-#' tool for that step.
+#' command that registers the public key on the server. Registering the key
+#' is a one-time step you run yourself; this function never contacts the
+#' server.
 #'
 #' @param host,user,port As passed to [ssh()]; used to build a descriptive
 #'   key filename and the suggested `ssh-copy-id` command.

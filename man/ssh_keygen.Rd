@@ -25,11 +25,9 @@ The identity file path, invisibly. Pass it as
 \description{
 Creates a new ed25519 keypair under \verb{~/.ssh} (reusing one already at the
 target \code{path} unless \code{overwrite = TRUE}) and prints the \code{ssh-copy-id}
-command that registers the public key on the server. netfs never contacts
-the server itself here: registering a key needs your existing password or
-access once, and SSH's own \code{BatchMode=yes} policy (see \code{\link[=ssh]{ssh()}}) means
-netfs can never supply one interactively - \code{ssh-copy-id} is the standard
-tool for that step.
+command that registers the public key on the server. Registering the key
+is a one-time step you run yourself; this function never contacts the
+server.
 }
 \examples{
 \dontrun{
@@ -40,8 +38,10 @@ con <- ssh("server.example.org", user = "alice", identity_file = key)
 \seealso{
 Other connection constructors: 
 \code{\link{ftp}()},
+\code{\link{s3}()},
 \code{\link{set_creds}()},
 \code{\link{smb}()},
-\code{\link{ssh}()}
+\code{\link{ssh}()},
+\code{\link{webdav}()}
 }
 \concept{connection constructors}

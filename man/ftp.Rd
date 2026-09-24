@@ -31,9 +31,11 @@ ftp("ftp.example.org")
 }
 \seealso{
 Other connection constructors: 
+\code{\link{s3}()},
 \code{\link{set_creds}()},
 \code{\link{smb}()},
 \code{\link{ssh}()},
-\code{\link{ssh_keygen}()}
+\code{\link{ssh_keygen}()},
+\code{\link{webdav}()}
 }
 \concept{connection constructors}

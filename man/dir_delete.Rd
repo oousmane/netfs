@@ -13,11 +13,9 @@ the first argument is shorthand for listing that connection's root.}
 \item{con}{\code{NULL} for local \code{fs} behavior, or a netfs connection.}
 
 \item{recurse}{Delete the directory's contents first if it isn't empty.
-Default \code{FALSE} matches a plain \code{rmdir}: deletion fails if the
-directory has anything in it, unlike local \code{\link[fs:delete]{fs::dir_delete()}}, which
-is always recursive. SMB deletes recursively either way (its native
-delete already works this way), so \code{recurse = TRUE} costs some
-redundant round trips there but is harmless.}
+\code{FALSE} (the default) fails instead, unlike local \code{\link[fs:delete]{fs::dir_delete()}},
+which is always recursive. SMB deletes recursively regardless of this
+argument, since its native delete already works that way.}
 
 \item{...}{Arguments passed to \code{fs::dir_ls()} locally or to the backend.}
 }

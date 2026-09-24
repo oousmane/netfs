@@ -13,9 +13,9 @@ ssh(host, user = NULL, port = 22, password = NULL, identity_file = NULL, ...)
 
 \item{port}{SSH port.}
 
-\item{password}{Optional password to store in \code{keyring}. OpenSSH
-command-line operations do not place this value on the command line;
-prefer an SSH agent, SSH configuration, or \code{identity_file}.}
+\item{password}{Optional password to store in \code{keyring}, for callers
+that manage authentication themselves; prefer an SSH agent, SSH
+configuration, or \code{identity_file} for netfs's own use.}
 
 \item{identity_file}{Optional private-key path.}
 
@@ -25,19 +25,16 @@ prefer an SSH agent, SSH configuration, or \code{identity_file}.}
 A \code{netfs_ssh} connection.
 }
 \description{
-Authentication may use SSH configuration, an agent, or an identity file.
-OpenSSH is run with \code{BatchMode=yes}, so it can never prompt for or accept
-a password - a stored \code{password} (see \code{password} below) is not usable
-for authentication as a result; it is kept only for callers that manage
-authentication another way. Construction does not contact the server.
+Authenticate with an SSH agent, SSH configuration, or \code{identity_file}.
+OpenSSH runs with \code{BatchMode=yes}, so it never prompts for a password;
+\code{password} is stored for callers that authenticate another way, not for
+netfs itself. Construction doesn't contact the server.
 }
 \details{
-On Unix, operations on the same connection share one OpenSSH
-\code{ControlMaster} connection instead of opening a new one (full handshake
-and authentication) per call - the first operation establishes it, later
-ones reuse it automatically. Not available on Windows (unreliable
-\code{ControlMaster} support in Windows OpenSSH), where each call still opens
-its own connection as before.
+On Unix, operations on one connection share a single OpenSSH
+\code{ControlMaster} session instead of reconnecting on every call. Not
+available on Windows, where OpenSSH's \code{ControlMaster} support is
+unreliable; each call opens its own connection there instead.
 }
 \examples{
 ssh("server.example.org", user = "user")
@@ -45,8 +42,10 @@ ssh("server.example.org", user = "user")
 \seealso{
 Other connection constructors: 
 \code{\link{ftp}()},
+\code{\link{s3}()},
 \code{\link{set_creds}()},
 \code{\link{smb}()},
-\code{\link{ssh_keygen}()}
+\code{\link{ssh_keygen}()},
+\code{\link{webdav}()}
 }
 \concept{connection constructors}

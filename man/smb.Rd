@@ -27,12 +27,9 @@ A \code{netfs_smb} connection. This object is also a valid smbclientr
 are not duplicated between the two packages.
 }
 \description{
-SMB support is provided by the smbclientr package: on Windows, operations
-use native Windows filesystem/UNC support; on macOS and Linux, operations
-use the separately installed Samba \code{smbclient} utility (on macOS, install
-it with Homebrew via \verb{brew install samba}; the MacPorts \code{samba4} port is
-known to crash on connect on some macOS versions). See
-\code{smbclientr::smb_connection()} for backend details.
+SMB support is provided by the smbclientr package: native UNC access on
+Windows, and Samba's \code{smbclient} (\verb{brew install samba}) on macOS and
+Linux. See \code{smbclientr::smb_connection()} for backend details.
 }
 \examples{
 \dontrun{
@@ -42,8 +39,10 @@ smb("fileserver", "DATA")
 \seealso{
 Other connection constructors: 
 \code{\link{ftp}()},
+\code{\link{s3}()},
 \code{\link{set_creds}()},
 \code{\link{ssh}()},
-\code{\link{ssh_keygen}()}
+\code{\link{ssh_keygen}()},
+\code{\link{webdav}()}
 }
 \concept{connection constructors}

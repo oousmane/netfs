@@ -42,8 +42,10 @@ delete_creds(con)
 \seealso{
 Other connection constructors: 
 \code{\link{ftp}()},
+\code{\link{s3}()},
 \code{\link{smb}()},
 \code{\link{ssh}()},
-\code{\link{ssh_keygen}()}
+\code{\link{ssh_keygen}()},
+\code{\link{webdav}()}
 }
 \concept{connection constructors}

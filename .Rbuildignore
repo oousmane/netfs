@@ -1,3 +1,7 @@
 ^netfs\.Rproj$
 ^\.r-lib$
 ^\.Rproj\.user$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.github$

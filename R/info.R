@@ -2,12 +2,9 @@
 #' @param path One or more local or remote paths.
 #' @inheritParams dir_ls
 #' @return Locally, the result of [fs::file_info()]. Remotely, a tibble with
-#'   one row per element of `path` and `path`, `type`, `size`, and
+#'   one row per `path` and `path`, `type`, `size`, and
 #'   `modification_time` columns, typed like their [fs::file_info()]
-#'   counterparts (`path` an `fs_path`, `type` a factor of
-#'   [fs::file_info()]'s levels, `size` an `fs_bytes`). Backends that cannot
-#'   determine a value report `NA`; a remote `type` string outside the known
-#'   levels also reports `NA`.
+#'   counterparts. A value the backend can't determine reports `NA`.
 #' @family filesystem operations
 #' @export
 file_info <- function(path, con = NULL, ...) {

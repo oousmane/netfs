@@ -18,10 +18,9 @@ the first argument is shorthand for listing that connection's root.}
 A logical vector.
 }
 \description{
-Remotely, \code{mode = "exists"} (the default) works on every backend. The
-\code{"read"}/\code{"write"}/\code{"execute"} modes require a permission-bit query the
-connection can actually make; currently only SSH can (\code{test -r}/\code{-w}/\code{-x}
-on the remote shell).
+\code{mode = "exists"} (the default) works on every backend. The
+\code{"read"}/\code{"write"}/\code{"execute"} modes need a real permission query and
+currently work only over SSH.
 }
 \seealso{
 Other filesystem operations: 

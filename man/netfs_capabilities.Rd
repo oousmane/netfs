@@ -10,7 +10,10 @@ netfs_capabilities(con = NULL)
 \item{con}{Optional netfs connection.}
 }
 \value{
-A tibble describing backends or supported operations.
+With no connection, a tibble of \code{backend}, \code{available}, \code{engine}
+(the underlying library or executable) and \code{package} (the R package
+providing it, or \code{"system"} when there isn't one). With a connection, a
+tibble of \code{operation} and \code{supported}.
 }
 \description{
 This function reports static client availability or operations supported by

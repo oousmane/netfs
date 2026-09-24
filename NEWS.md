@@ -116,3 +116,63 @@
   `file_copy()` - currently just FTP. Each such file instead falls back to
   a local-staging download+upload, so the copy still completes.
 * `netfs_capabilities(con)` now reports support for every operation above.
+* Added a fourth remote backend, `webdav()`, delegating to the `webdav`
+  package (built on `httr2` alone - no external binary, unlike the SSH and
+  SMB backends). A WebDAV connection is identified by a single base URL
+  rather than host/port, since that URL commonly carries a server-specific
+  path prefix (a per-user DAV root, for instance). Supports the full
+  `netfs` API except the SSH-only permission/ownership/timestamp/symlink
+  operations; `file_move()` is a copy followed by deleting the source (no
+  native rename is exposed) - not atomic, so a failed delete leaves both
+  copies behind rather than neither. Two real defects in the underlying
+  `webdav` package were found and worked around, both confirmed live
+  against a local WebDAV server: its error handling is inconsistent
+  between functions (some throw on failure, others only warn and return
+  `FALSE`/`NULL`, both now handled uniformly), and its directory listing
+  always discards its first result row on the assumption it's the queried
+  collection's own entry - true for a directory, but it silently drops a
+  plain file's only entry too, making a file and an empty directory
+  indistinguishable by listing either directly; a specific path's own type
+  is instead always resolved by listing its parent.
+* Fixed `dir_ls()`/`dir_info()` over WebDAV producing garbage paths (the
+  scheme and host embedded as bogus leading path segments) against some
+  servers. RFC 4918 permits a PROPFIND response's `<href>` to be either a
+  server-relative path or a full absolute URL, server's choice; confirmed
+  live that a local WsgiDAV server uses the former and IT Hit's .NET
+  WebDAV Server (`webdavserver.net`) uses the latter. Both are now handled.
+* Also fixed `webdav()` never actually checking that the `webdav` package
+  was installed (the check function existed but nothing called it - `smb()`
+  already called its own equivalent check, `webdav()` didn't), and applied
+  the same construction-time check to the new `s3()` connection below.
+* Added a fifth remote backend, `s3()`, delegating to the `s3fs` package
+  (built on `paws` alone - no external binary). A connection is scoped to
+  one bucket, the same way `smb()` is scoped to one share. Every
+  `s3fs::s3_*()` convenience function shares one connection process-wide
+  (a global cache `s3_file_system()` maintains internally), which would
+  make a second `s3()` connection silently clobber a first one still in
+  use; `netfs` instead builds its own `s3fs::S3FileSystem` R6 object fresh
+  per call and uses its methods directly, the same "rebuild, don't share"
+  approach already used for FTP's curl handles.
+* Two real defects in `s3fs` were found and worked around, both confirmed
+  live against a local MinIO server: `file_copy()`/`file_move()`
+  internally decide between an S3-to-S3 copy, a download, or an upload by
+  checking for a literal `"s3://"` prefix on the path - a bare
+  `"bucket/key"` string (the format every other `s3fs` method here
+  accepts and works with) matches none of the three, and the call reports
+  success while silently doing nothing at all. And in `file_info()`
+  specifically (which uses `future_lapply()` internally), a translated
+  error thrown from inside a `tryCatch()` handler was being re-caught by
+  that same `tryCatch()`'s own generic handler instead of reaching the
+  caller - collapsing a precise `netfs_not_found`/`netfs_auth_error` down
+  to a generic failure; fixed by resolving the outcome inside `tryCatch()`
+  and only throwing after it returns.
+* `dir_delete()` without `recurse = TRUE` refuses a non-empty S3
+  "directory" the same way every other backend's plain delete does, even
+  though S3 itself has no atomic primitive for that - `s3fs`'s own
+  `dir_delete()` is unconditionally recursive, so this checks with a
+  listing first.
+* AWS S3 authentication failures classify as `netfs_permission_error`
+  (HTTP 403), not `netfs_auth_error` (401) - confirmed live that a wrong
+  secret key comes back as 403 even from a S3-compatible server (MinIO),
+  matching AWS's own API convention of using 403 for both
+  `SignatureDoesNotMatch` and genuine permission denials alike.

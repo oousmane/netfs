@@ -13,7 +13,9 @@
   endpoint <- switch(class(con)[[1L]],
     netfs_ftp = paste0(con$host, ":", con$port),
     netfs_ssh = paste0(con$host, ":", con$port),
-    netfs_smb = paste0(con$host, "/", con$share)
+    netfs_smb = paste0(con$host, "/", con$share),
+    netfs_webdav = con$url,
+    netfs_s3 = con$bucket
   )
   paste("netfs", backend, endpoint, sep = ":")
 }

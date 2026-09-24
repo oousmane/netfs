@@ -16,6 +16,8 @@ print.netfs_connection <- function(x, ...) {
     netfs_ftp = c("host", "user", "port", "tls"),
     netfs_ssh = c("host", "user", "port", "identity_file"),
     netfs_smb = c("host", "share", "user", "domain"),
+    netfs_webdav = c("url", "user"),
+    netfs_s3 = c("bucket", "user", "region_name", "endpoint"),
     character()
   )
   for (name in visible) {

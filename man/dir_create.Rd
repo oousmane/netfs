@@ -16,7 +16,7 @@ the first argument is shorthand for listing that connection's root.}
 }
 \value{
 The path, invisibly, as an \code{fs_path}. Remote creation is
-non-recursive unless explicitly supported by a backend argument.
+non-recursive unless the backend offers its own way to opt in.
 }
 \description{
 Create a directory

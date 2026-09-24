@@ -21,9 +21,8 @@ The destination path, invisibly, as an \code{fs_path}.
 }
 \description{
 On a backend without server-side \code{\link[=file_copy]{file_copy()}} (currently FTP), each
-file is instead copied through a local staging file - one download
-followed by one upload - so the copy still completes; it's just slower
-than SSH's \code{cp} or SMB's native server-side copy.
+file is copied through a local staging download and upload instead, so
+the copy still completes - just more slowly than a native copy.
 }
 \seealso{
 Other filesystem operations: 

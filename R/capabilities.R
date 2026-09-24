@@ -9,7 +9,10 @@
 #' This function reports static client availability or operations supported by
 #' a connection class. It never contacts a remote server.
 #' @param con Optional netfs connection.
-#' @return A tibble describing backends or supported operations.
+#' @return With no connection, a tibble of `backend`, `available`, `engine`
+#'   (the underlying library or executable) and `package` (the R package
+#'   providing it, or `"system"` when there isn't one). With a connection, a
+#'   tibble of `operation` and `supported`.
 #' @examples
 #' netfs_capabilities()
 #' netfs_capabilities(ssh("server.example.org"))
@@ -18,9 +21,11 @@ netfs_capabilities <- function(con = NULL) {
   if (is.null(con)) {
     smb <- if (requireNamespace("smbclientr", quietly = TRUE)) smbclientr::smb_capabilities() else NULL
     return(tibble::tibble(
-      backend = c("local", "ftp", "ssh", "smb"),
-      available = c(TRUE, .has_curl(), .has_ssh() && .has_scp(), isTRUE(smb$available)),
-      engine = c("fs", "libcurl", "OpenSSH", if (is.null(smb)) NA_character_ else smb$engine)
+      backend = c("local", "ftp", "ssh", "smb", "webdav", "s3"),
+      available = c(TRUE, .has_curl(), .has_ssh() && .has_scp(), isTRUE(smb$available),
+        requireNamespace("webdav", quietly = TRUE), requireNamespace("s3fs", quietly = TRUE)),
+      engine = c("libuv", "libcurl", "openssh", if (is.null(smb)) NA_character_ else smb$engine, "httr2", "paws"),
+      package = c("fs", "curl", "system", "smbclientr", "webdav", "s3fs")
     ))
   }
   .check_connection(con)
@@ -41,7 +46,9 @@ netfs_capabilities <- function(con = NULL) {
   supported <- switch(class(con)[[1L]],
     netfs_ssh = rep(TRUE, length(operations)),
     netfs_ftp = !operations %in% c("file_copy", ssh_only),
-    netfs_smb = !operations %in% ssh_only
+    netfs_smb = !operations %in% ssh_only,
+    netfs_webdav = !operations %in% ssh_only,
+    netfs_s3 = !operations %in% ssh_only
   )
   tibble::tibble(operation = operations, supported = supported)
 }

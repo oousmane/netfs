@@ -17,9 +17,9 @@ the first argument is shorthand for listing that connection's root.}
 
 \item{con}{\code{NULL} for local \code{fs} behavior, or a netfs connection.}
 
-\item{access_time, modification_time}{Timestamps to set. Defaulting both
-to "now" uses a plain, universally portable \code{touch}; an explicit,
-different timestamp requires GNU \code{touch} on the remote.}
+\item{access_time, modification_time}{Timestamps to set. Left at their
+defaults ("now"), this works on any remote; an explicit timestamp
+requires GNU \code{touch} on the remote.}
 }
 \value{
 The path, invisibly, as an \code{fs_path}.

@@ -2,12 +2,13 @@
 
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 
-`netfs` provides `fs`-style filesystem operations for local files and remote
-FTP, SSH, and SMB connections. Local operations delegate directly to `fs`.
+`netfs` extends [`fs`](https://fs.r-lib.org)'s filesystem interface to remote
+connections. Every function keeps `fs`'s names, arguments, and return types;
+adding `con = <connection>` sends the same call to an FTP, SSH, SMB,
+WebDAV, or S3 server instead of the local disk. Calls without `con`
+delegate directly to `fs`.
 
 ## Installation
-
-Install the package from its source directory:
 
 ```r
 install.packages(".", repos = NULL, type = "source")
@@ -18,188 +19,174 @@ install.packages(".", repos = NULL, type = "source")
 ```r
 library(netfs)
 
-dir_ls("data")
+dir_ls("data")                                        # local, as usual
 
-server <- ssh(host = "server.example.org", user = "user")
+server <- ssh("server.example.org", user = "user")
 dir_ls("/data", con = server)
 file_download("/data/input.csv", local = "input.csv", con = server)
 ```
 
-`ssh_keygen()` generates an identity file for a server and prints the
-`ssh-copy-id` command to register it there; it does not contact the server
-itself:
+`ftp()`, `ssh()`, and `smb()` describe a connection without contacting the
+server; a connection never prints its password. Substitute one for another
+without changing the rest of the code:
+
+```r
+server <- smb("fileserver", "DATA")
+dir_ls("/reports", con = server)
+dir_ls(server)                       # shorthand for the connection's root
+```
+
+Remote paths work with or without a leading slash:
+
+```r
+dir_ls("/reports", con = server)
+dir_ls("reports", con = server)
+```
+
+### Transfers
+
+A destination that's an existing directory, or ends in `/`, appends the
+source's basename automatically:
+
+```r
+file_upload("report.pdf", "/archive/", con = server)
+file_download("/reports/result.csv", "downloads/", con = server)
+```
+
+Uploads refuse to replace an existing remote file unless `overwrite = TRUE`.
+Downloads with `overwrite = FALSE` (the default) keep an existing file and
+write to a numbered name instead, e.g. `result-1.csv`.
+
+`file_transfer()` moves a file between two different connections through a
+local staging copy - not a direct server-to-server transfer:
+
+```r
+file_transfer(
+  "/incoming/report.csv", "/archive/",
+  from = ftp("ftp.example.org", user = "analyst"),
+  to = smb("fileserver", "DATA", user = "analyst")
+)
+```
+
+### SSH keys
+
+`ssh_keygen()` generates an identity file and prints the command to register
+it on the server; it never contacts the server itself:
 
 ```r
 key <- ssh_keygen("server.example.org", user = "user")
 #> Generated identity file: ~/.ssh/id_ed25519_user_server.example.org
 #> Register it on the server by running:
 #>   ssh-copy-id -i ~/.ssh/id_ed25519_user_server.example.org.pub user@server.example.org
-server <- ssh(host = "server.example.org", user = "user", identity_file = key)
+server <- ssh("server.example.org", user = "user", identity_file = key)
 ```
-
-A destination ending in `/` represents a directory. Existing local and remote
-directories are also detected when the trailing slash is omitted. netfs
-appends the source basename in both transfer directions:
-
-```r
-file_upload("BAD26011.pdf", "/BAD-netfs/", con = server)
-file_download("/reports/result.csv", "downloads/", con = server)
-```
-
-Uploads protect an existing remote file unless replacement is explicit:
-
-```r
-file_upload("BAD26011.pdf", "/BAD-netfs/", con = server, overwrite = TRUE)
-```
-
-Downloads use a numbered filename when `overwrite = FALSE`: an existing
-`result.csv` produces `result-1.csv`, followed by `result-2.csv` when needed.
-
-Transfer between two remote connections with `file_transfer()`. The operation
-uses a temporary local staging file, which is removed after success or failure;
-it is not a direct server-to-server copy:
-
-```r
-ftp_server <- ftp("ftp.example.org", user = "analyst")
-smb_server <- smb("fileserver", "DATA", user = "analyst")
-
-file_transfer(
-  "/incoming/report.csv",
-  "/archive/",
-  from = ftp_server,
-  to = smb_server
-)
-```
-
-Substitute `ftp()` or `smb()` without changing the filesystem workflow:
-
-```r
-server <- smb(host = "fileserver", share = "DATA")
-dir_ls("/reports", con = server)
-```
-
-List the connection root with either explicit or shorthand syntax:
-
-```r
-dir_ls(con = server)
-dir_ls(server)
-```
-
-Remote paths may be written with or without a leading slash. Both forms refer
-to the same path inside the connection root:
-
-```r
-dir_ls("/DEMANDES_DONNEES", con = server)
-dir_ls("DEMANDES_DONNEES", con = server)
-```
-
-Connection construction validates configuration but does not contact the
-server. Printed connections never include passwords.
 
 ## Credentials
 
-Store credentials in the operating system credential store instead of source
-code or connection objects:
+Passwords are stored in the operating system's credential store, never in
+source code or in the connection object itself:
 
 ```r
 server <- ftp("ftp.example.org", user = "analyst")
-set_creds(server) # securely prompts for the password
+set_creds(server)          # prompts for the password without echoing it
+get_creds(server)          # <hidden>
+delete_creds(server)
 ```
 
-The connection stores only its host and username. `get_creds()` returns a
-hidden S3 object, and `delete_creds()` removes the stored value:
+Select a named keyring by setting `NETFS_KEYRING` in `.Renviron` - never put
+the password itself there. A `password =` argument to a connection
+constructor is stored through `keyring` immediately and not retained on the
+connection object.
+
+## Backends
+
+| Backend | Engine | Package | Requires |
+|---|---|---|---|
+| Local | libuv | `fs` | Nothing extra |
+| FTP / FTPS | libcurl | `curl` | Nothing extra |
+| SSH / SFTP | openssh | *(system)* | The `ssh` and `scp` executables |
+| SMB | smbclient | [`smbclientr`](https://github.com/oousmane/smbclientr) | The `smbclientr` package (optional) |
+| WebDAV | `httr2` | `webdav` | The `webdav` package (optional) |
+| S3 | `paws` | `s3fs` | The `s3fs` package (optional) |
+
+`netfs_capabilities()` reports these same `engine` and `package` values, plus
+whether each is actually available on the current machine.
+
+SMB is handled entirely by `smbclientr`: Samba's `smbclient` on Linux and
+macOS (`brew install samba`), native UNC access on Windows. WebDAV is
+handled entirely by the `webdav` package, itself built on `httr2` alone.
+S3 is handled entirely by `s3fs`, built on `paws` alone. None of the three
+need an external binary; all three translate their own errors into
+`netfs`'s condition classes and otherwise stay out of the protocol.
 
 ```r
-credential <- get_creds(server)
-credential               # <hidden>
+server <- webdav("https://cloud.example.org/remote.php/dav/files/alice/", user = "alice")
+dir_ls("/reports", con = server)
+
+bucket <- s3("my-bucket", region_name = "us-east-1")
+dir_ls("/reports", con = bucket)
 ```
 
-To select a named keyring, add only its name to `.Renviron`:
-
-```text
-NETFS_KEYRING=netfs
-```
-
-Do not put a password in `.Renviron`. When `password=` is supplied to a
-connection constructor for compatibility, netfs immediately stores it through
-`keyring` and does not retain it in the returned connection object.
-
-## Backend requirements
-
-| Backend | Client engine | Notes |
-|---|---|---|
-| Local | `fs` | Always available when the package is installed |
-| FTP / FTPS | libcurl | Included through the `curl` package |
-| SSH / SFTP | OpenSSH | Requires `ssh` and `scp` executables |
-| SMB (all platforms) | [`smbclientr`](https://github.com/oousmane/smbclientr) | An optional (`Suggests`) dependency; install it to use `smb()` |
-
-`smb()` delegates entirely to the `smbclientr` package, which provides its
-own `fs`-style interface to SMB shares: Samba `smbclient` on Linux and macOS
-(install with Homebrew — `brew install samba`; the MacPorts `samba4` port is
-known to crash on connect on some macOS versions), and native Windows
-UNC/filesystem support on Windows. `netfs` translates `smbclientr`'s errors
-into its own condition classes and otherwise stays out of SMB protocol
-mechanics entirely. See `smbclientr`'s own documentation for backend details.
-
-Inspect the current system and a connection without contacting a server:
+A WebDAV connection is identified by a single base URL rather than a
+separate host and port, since that URL commonly carries a server-specific
+path prefix (a per-user DAV root, for instance). An S3 connection is
+scoped to one bucket, the same way `smb()` is scoped to one share - paths
+are always relative to that bucket's own key namespace. Neither WebDAV nor
+S3 has a server-side rename, so `file_move()` on either is a copy followed
+by deleting the source - not atomic: if the delete fails, both copies are
+left behind rather than neither.
 
 ```r
-netfs_capabilities()
-netfs_capabilities(server)
+netfs_capabilities()          # client availability, this machine
+netfs_capabilities(server)    # operations this connection supports
 ```
 
 ## API coverage
 
-Beyond the core operations above, `netfs` mirrors most of `fs`'s remaining
-API for remote connections: `dir_info()`, `dir_map()`, `dir_walk()`,
-`dir_tree()`, `dir_copy()`, `file_size()`, `file_create()`, `is_file()`,
-`is_dir()`, `is_link()`, `is_file_empty()`, `is_dir_empty()`, `file_access()`,
+`netfs` covers `fs`'s full remote-relevant API: alongside `dir_ls()`,
+`file_copy()`, `file_move()`, `file_info()`, and the operations above, it
+also provides `dir_info()`, `dir_map()`, `dir_walk()`, `dir_tree()`,
+`dir_copy()`, `file_size()`, `file_create()`, `is_file()`, `is_dir()`,
+`is_link()`, `is_file_empty()`, `is_dir_empty()`, `file_access()`,
 `file_chmod()`, `file_chown()`, `file_touch()`, `link_create()`,
-`link_path()`, `link_copy()`, and `link_delete()`. `dir_ls()`/`dir_info()`
-also take a `recurse` argument.
+`link_path()`, `link_copy()`, and `link_delete()`. `dir_ls()` and
+`dir_info()` take a `recurse` argument.
 
-A few `fs` functions have no `con =` counterpart at all, because they don't
-operate on a connection's filesystem in the first place:
-`fs::path_*()` (`path_join()`, `path_abs()`, `path_ext()`, ...) are pure
-string manipulation and already work on a remote path string unchanged;
-`fs::file_temp()`/`fs::path_temp()` name a *local* temporary file; and
-`fs::group_ids()`/`fs::user_ids()` look up accounts on the *local* system.
-Call the `fs::` versions directly for these.
+A few `fs` functions have no remote counterpart, because they never touch a
+connection's filesystem in the first place: `fs::path_*()` functions are
+plain string manipulation and work unchanged on a remote path; `file_temp()`
+and `group_ids()`/`user_ids()` refer to the local machine. Call `fs::`
+directly for these.
 
-`file_show()` is provided but always fails for a remote connection: it
-opens a path in a local viewer application, which makes no sense for a path
-that isn't on this machine. Download the file first, then call
-`fs::file_show()` on the local copy.
+Permissions, ownership, arbitrary timestamps, and symlinks
+(`file_chmod()`, `file_chown()`, `file_touch()` with an explicit timestamp,
+`file_access()`'s read/write/execute modes, and every `link_*()` function)
+work only over SSH, which is the one backend with a real remote shell behind
+it. FTP, SMB, WebDAV, and S3 have no consistent equivalent and raise
+`netfs_unsupported`. `file_show()` always raises it too, for any remote
+connection - it opens a local viewer, which has no meaning for a path that
+isn't on this machine.
 
-## Current limitations
+## Limitations
 
-- Remote operations depend on the capabilities of the selected backend.
-- Server-side `file_copy()` is unavailable for FTP (no copy command in the
-  base protocol); it fails with `netfs_unsupported` instead of downloading
-  and re-uploading the file. SSH supports it via `cp` on the remote shell,
-  and SMB via `smbclientr` (`smbclient`'s `scopy` or native Windows copy).
-  `dir_copy()` works on every backend regardless - on FTP, each file falls
-  back to a local-staging download+upload instead of failing.
-- POSIX permissions, ownership, arbitrary timestamps, and symlinks
-  (`file_chmod()`, `file_chown()`, `file_touch()` with an explicit
-  timestamp, `file_access()`'s `"read"`/`"write"`/`"execute"` modes,
-  `link_create()`, `link_path()`, `link_copy()`, `link_delete()`) are
-  SSH-only - FTP and SMB have no consistent equivalent, and fail with
-  `netfs_unsupported`. `file_touch()` with an explicit timestamp
-  additionally needs a GNU `touch` on the remote (confirmed against Linux
-  and Windows/Git Bash remotes); BSD/macOS SSH remotes aren't currently
-  supported for arbitrary timestamps, since BSD `touch -t`'s local-time
-  semantics couldn't be verified without a reachable BSD SSH target.
-- `file_transfer()` supports cross-connection transfers through temporary
-  local staging. It is not a direct server-to-server operation.
-- Password authentication for command-line SSH is not injected into process
-  arguments. Use an SSH agent, SSH configuration, or an identity file. On
-  Unix, operations on the same SSH connection share one OpenSSH
-  `ControlMaster` connection rather than reconnecting per call (confirmed
-  live: roughly a 9-13x speedup for repeated operations); not available on
-  Windows.
-- Normal unit tests use mocked transports and do not require live servers.
+- Server-side `file_copy()` isn't available over FTP, which has no copy
+  command in its protocol; it fails with `netfs_unsupported`. SSH, SMB,
+  WebDAV, and S3 all support it natively. `dir_copy()` works everywhere
+  regardless: on FTP, each file is copied through a local staging download
+  and upload.
+- S3 has no atomic "fail if not empty" primitive the way `rmdir` or FTP's
+  `RMD` do - `dir_delete()` without `recurse = TRUE` still refuses a
+  non-empty "directory" there, but by checking with an extra listing
+  first, not a single native call.
+- SSH authentication never places a password on the command line; use an
+  agent, SSH configuration, or an identity file. Operations on one
+  connection share a single OpenSSH `ControlMaster` session on Unix, so
+  repeated calls reuse the handshake instead of reconnecting each time
+  (not available on Windows).
+- `file_touch()` with an explicit timestamp requires GNU `touch` on the
+  remote; BSD/macOS SSH servers aren't currently supported for that case.
+- Unit tests run against mocked transports and don't require a live server.
 
-Remote failures inherit from `netfs_error`, with subclasses for authentication,
+Remote errors inherit from `netfs_error`, with subclasses for authentication,
 missing paths, permissions, timeouts, unavailable backends, and unsupported
 operations.

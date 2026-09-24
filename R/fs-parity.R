@@ -37,8 +37,8 @@ dir_info <- function(path = ".", con = NULL, type = "any", recurse = FALSE, ...)
 #' Apply a function to each entry in a directory
 #' @inheritParams dir_ls
 #' @param fun A function to apply to each path.
-#' @param fail Passed to [fs::dir_map()] locally; remotely, always fails on
-#'   a listing error (there is no partial-failure mode to suppress).
+#' @param fail Passed to [fs::dir_map()] locally. Not configurable remotely:
+#'   a listing error always fails the call.
 #' @return Locally, the result of [fs::dir_map()]. Remotely, a list of
 #'   `fun`'s results, one per entry.
 #' @family filesystem operations
@@ -143,10 +143,9 @@ is_dir_empty <- function(path, con = NULL) {
 
 #' Query for existence and access permissions
 #'
-#' Remotely, `mode = "exists"` (the default) works on every backend. The
-#' `"read"`/`"write"`/`"execute"` modes require a permission-bit query the
-#' connection can actually make; currently only SSH can (`test -r`/`-w`/`-x`
-#' on the remote shell).
+#' `mode = "exists"` (the default) works on every backend. The
+#' `"read"`/`"write"`/`"execute"` modes need a real permission query and
+#' currently work only over SSH.
 #' @inheritParams dir_ls
 #' @param mode One or more of `"exists"`, `"read"`, `"write"`, `"execute"`.
 #' @return A logical vector.
@@ -200,9 +199,9 @@ file_chown <- function(path, con = NULL, user_id = NULL, group_id = NULL) {
 
 #' Change file access and modification times
 #' @inheritParams dir_ls
-#' @param access_time,modification_time Timestamps to set. Defaulting both
-#'   to "now" uses a plain, universally portable `touch`; an explicit,
-#'   different timestamp requires GNU `touch` on the remote.
+#' @param access_time,modification_time Timestamps to set. Left at their
+#'   defaults ("now"), this works on any remote; an explicit timestamp
+#'   requires GNU `touch` on the remote.
 #' @return The path, invisibly, as an `fs_path`.
 #' @family filesystem operations
 #' @export
@@ -266,9 +265,8 @@ file_show <- function(path, con = NULL, browser = getOption("browser")) {
 #' Copy a directory
 #'
 #' On a backend without server-side [file_copy()] (currently FTP), each
-#' file is instead copied through a local staging file - one download
-#' followed by one upload - so the copy still completes; it's just slower
-#' than SSH's `cp` or SMB's native server-side copy.
+#' file is copied through a local staging download and upload instead, so
+#' the copy still completes - just more slowly than a native copy.
 #' @inheritParams file_copy
 #' @param overwrite Replace an existing destination directory.
 #' @return The destination path, invisibly, as an `fs_path`.

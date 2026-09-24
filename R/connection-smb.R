@@ -8,12 +8,9 @@
 
 #' Create an SMB connection description
 #'
-#' SMB support is provided by the smbclientr package: on Windows, operations
-#' use native Windows filesystem/UNC support; on macOS and Linux, operations
-#' use the separately installed Samba `smbclient` utility (on macOS, install
-#' it with Homebrew via `brew install samba`; the MacPorts `samba4` port is
-#' known to crash on connect on some macOS versions). See
-#' `smbclientr::smb_connection()` for backend details.
+#' SMB support is provided by the smbclientr package: native UNC access on
+#' Windows, and Samba's `smbclient` (`brew install samba`) on macOS and
+#' Linux. See `smbclientr::smb_connection()` for backend details.
 #' @param host SMB server hostname.
 #' @param share Share name, separate from operation paths.
 #' @param user Optional login name.

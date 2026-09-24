@@ -15,7 +15,8 @@ abort_netfs_unsupported <- function(message, ...) abort_netfs(message, "netfs_un
 }
 
 .netfs_backend_name <- function(con) {
-  switch(class(con)[[1L]], netfs_ssh = "SSH", netfs_ftp = "FTP", netfs_smb = "SMB", class(con)[[1L]])
+  switch(class(con)[[1L]], netfs_ssh = "SSH", netfs_ftp = "FTP", netfs_smb = "SMB",
+    netfs_webdav = "WebDAV", netfs_s3 = "S3", class(con)[[1L]])
 }
 
 .abort_netfs_op_unsupported <- function(con, operation, detail = NULL) {

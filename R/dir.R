@@ -2,17 +2,13 @@
 #' @param path A local or remote path. For `dir_ls()`, a connection supplied as
 #'   the first argument is shorthand for listing that connection's root.
 #' @param con `NULL` for local `fs` behavior, or a netfs connection.
-#' @param type For remote connections, one or more of [fs::file_info()]'s
-#'   type levels (e.g. `"file"`, `"directory"`) to filter the listing to;
-#'   `"any"` (the default) returns everything. Filtering by a type other
-#'   than `"any"` costs an extra round trip per entry on backends that can't
-#'   determine type from the directory listing itself (currently FTP, and
-#'   SSH via the default fallback); SMB determines it from the listing at no
-#'   extra cost. An entry whose type can't be determined (`NA`) never
-#'   matches a specific type.
-#' @param recurse For remote connections, recurse fully into subdirectories?
-#'   Costs one extra round trip per subdirectory found (each is listed in
-#'   turn), same as `type` filtering.
+#' @param type One or more of [fs::file_info()]'s type levels (e.g.
+#'   `"file"`, `"directory"`) to filter the listing to; `"any"` (the
+#'   default) returns everything. An entry whose type can't be determined
+#'   never matches a specific type. Filtering by type, like `recurse`,
+#'   costs one extra request per entry on backends that don't return type
+#'   with the listing itself.
+#' @param recurse Recurse fully into subdirectories?
 #' @param ... Arguments passed to `fs::dir_ls()` locally or to the backend.
 #' @return An `fs_path` vector. Remote paths use forward slashes.
 #' @family filesystem operations
@@ -52,7 +48,7 @@ dir_exists <- function(path, con = NULL) {
 #' Create a directory
 #' @inheritParams dir_ls
 #' @return The path, invisibly, as an `fs_path`. Remote creation is
-#'   non-recursive unless explicitly supported by a backend argument.
+#'   non-recursive unless the backend offers its own way to opt in.
 #' @family filesystem operations
 #' @export
 dir_create <- function(path, con = NULL, ...) {
@@ -64,11 +60,9 @@ dir_create <- function(path, con = NULL, ...) {
 #' Delete a directory
 #' @inheritParams dir_ls
 #' @param recurse Delete the directory's contents first if it isn't empty.
-#'   Default `FALSE` matches a plain `rmdir`: deletion fails if the
-#'   directory has anything in it, unlike local [fs::dir_delete()], which
-#'   is always recursive. SMB deletes recursively either way (its native
-#'   delete already works this way), so `recurse = TRUE` costs some
-#'   redundant round trips there but is harmless.
+#'   `FALSE` (the default) fails instead, unlike local [fs::dir_delete()],
+#'   which is always recursive. SMB deletes recursively regardless of this
+#'   argument, since its native delete already works that way.
 #' @return The path, invisibly, as an `fs_path`.
 #' @family filesystem operations
 #' @export
