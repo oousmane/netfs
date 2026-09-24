@@ -185,6 +185,10 @@ isn't on this machine.
   (not available on Windows).
 - `file_touch()` with an explicit timestamp requires GNU `touch` on the
   remote; BSD/macOS SSH servers aren't currently supported for that case.
+- SMB on Windows (native UNC access, via `smbclientr`) has run successfully
+  against a live server on one Windows machine, but is still very
+  experimental - broader testing is ongoing. Linux and macOS, going through
+  Samba's `smbclient`, are better exercised.
 - Unit tests run against mocked transports and don't require a live server.
 
 Remote errors inherit from `netfs_error`, with subclasses for authentication,
